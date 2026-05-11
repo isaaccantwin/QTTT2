@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>量子圈圈叉叉 Quantum Tic-Tac-Toe</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #F5F7F4; /* 淺森林米色 */
+    --panel:   #FFFFFF; /* 純白面板 */
+    --border:  #D1D9D3; /* 柔和灰綠色邊界 */
+    --cyan:    #4A7C59; /* 主題綠 */
+    --orange:  #D97C48; /* 陶土橘 */
+    --green:   #6EBF8B; /* 鼠尾草綠（高光） */
+    --muted:   #8E9F90; /* 灰綠色文字 */
+    --text:    #2C3E32; /* 深森林綠文字 */
+    --x-col:   #4A7C59; /* X 用森林綠 */
+    --o-col:   #D97C48; /* O 用陶土橘 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-image: linear-gradient(rgba(245, 247, 244, 0.7), rgba(245, 247, 244, 0.85)), url('/menu-img.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: 'Nunito', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ── Layout ── */
+  #layout {
+    display: flex;
+    flex-direction: row;
+    gap: 2vw;
+    width: 100%;
+    max-width: 98vw;
+    justify-content: center;
+    align-items: stretch;
+  }
+  #left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2vh;
+    width: 24vw;
+  }
+  #center-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5vh;
+  }
+  #right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2vh;
+    justify-content: space-between;
+  }
+  .player-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 3vh 2vw;
+    width: 20vw;
+    min-width: 200px;
+    text-align: center;
+    transition: all 0.3s;
+    height: fit-content;
+    box-shadow: 0 4px 16px rgba(44, 62, 50, 0.04);
+  }
+  .player-panel.active {
+    border-color: var(--x-col);
+    box-shadow: 0 8px 24px rgba(74, 124, 89, 0.15);
+    transform: translateY(-2px);
+  }
+  .player-panel.active-o {
+    border-color: var(--o-col);
+    box-shadow: 0 8px 24px rgba(217, 124, 72, 0.15);
+    transform: translateY(-2px);
+  }
+  .player-panel h2 {
+    font-size: 4vh;
+    margin-bottom: 1vh;
+  }
+  #panel-o h2 { color: var(--o-col); }
+  #panel-x h2 { color: var(--x-col); }
+  
+  .timer {
+    font-size: 7vh;
+    font-weight: 700;
+    margin: 3vh 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .victory-message {
+    display: none;
+    font-size: 2.5vh;
+    font-weight: bold;
+    color: var(--green);
+    margin-top: 2vh;
+    line-height: 1.5;
+  }
+  .victory-message.show {
+    display: block;
+    animation: pop-in .5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  h1 {
+    font-size: 3.5vh;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  /* ── Status bar ── */
+  #status {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5vh 3vw;
+    text-align: center;
+    font-size: 2vh;
+    min-width: 40vw;
+    line-height: 1.4;
+  }
+  #status .player-x { color: var(--x-col); font-weight: 700; }
+  #status .player-o { color: var(--o-col); font-weight: 700; }
+  #status .hint     { color: var(--muted); font-size: 1.8vh; }
+
+  /* ── Main 3×3 board ── */
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    background: var(--border);
+    border: 6px solid var(--border);
+    border-radius: 12px;
+  }
+
+  /* ── Big cell ── */
+  .bigcell {
+    background: var(--bg);
+    border: none;
+    border-radius: 6px;
+    width: 20vh;
+    height: 20vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+  }
+  .bigcell:hover:not(.classical):not(.no-hover) {
+    background: #EAECE8;
+  }
+  .bigcell.selected-first {
+    background: rgba(74, 124, 89, 0.08) !important;
+  }
+  .bigcell.winning {
+    background: rgba(110, 191, 139, 0.2) !important;
+    animation: gentle-bounce 0.5s ease-out;
+  }
+  @keyframes gentle-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+
+  /* ── Classical mark (fills whole big cell) ── */
+  .bigcell.classical {
+    cursor: default;
+  }
+  .classical-mark {
+    font-size: 13vh;
+    font-weight: 900;
+    line-height: 0.9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: pop-in .25s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .classical-mark.x { color: var(--x-col); }
+  .classical-mark.o { color: var(--o-col); }
+  .classical-mark sub { font-size: 3.5vh; font-weight: 600; opacity: 0.6; vertical-align: baseline; margin-top: 0.5vh; }
+  @keyframes pop-in {
+    from { transform: scale(0.2); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
+  /* ── Quantum marks sub-grid (3×3 slots) ── */
+  .quantum-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+    padding: 4px;
+  }
+  .q-slot {
+    background: rgba(44, 62, 50, 0.03);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4vh;
+    font-weight: 800;
+    line-height: 1;
+    min-height: 0;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .q-slot:hover:not(.x):not(.o) {
+    background: rgba(74, 124, 89, 0.08);
+  }
+  .q-slot.selected-slot {
+    background: rgba(74, 124, 89, 0.15) !important;
+    box-shadow: inset 0 0 0 2px var(--x-col);
+  }
+  .q-slot.x { color: var(--x-col); }
+  .q-slot.o { color: var(--o-col); }
+  .q-slot sub { font-size: 1.8vh; vertical-align: baseline; margin-left: 2px; align-self: flex-end; margin-bottom: 0.8vh; font-weight: 600; opacity: 0.7; }
+
+  .q-slot.highlight-slot {
+    background: rgba(110, 191, 139, 0.2) !important;
+    box-shadow: inset 0 0 0 2px var(--green);
+    animation: pulse-green 1.5s infinite;
+    cursor: pointer !important;
+  }
+  @keyframes pulse-green {
+    0% { transform: scale(1); box-shadow: inset 0 0 0 2px var(--green); }
+    50% { transform: scale(1.05); box-shadow: inset 0 0 0 3px var(--green); }
+    100% { transform: scale(1); box-shadow: inset 0 0 0 2px var(--green); }
+  }
+
+  /* ── Collapse Mode Overrides ── */
+  #board.collapse-mode .bigcell:hover:not(.classical) {
+    background: var(--bg);
+  }
+  #board.collapse-mode .q-slot:not(.highlight-slot) {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+  #board.collapse-mode .q-slot:not(.highlight-slot):hover {
+    background: rgba(44, 62, 50, 0.03);
+  }
+
+  /* ── Playing Mode Block Sibling Slots ── */
+  .bigcell.selected-first .q-slot:not(.selected-slot) {
+    pointer-events: none;
+    cursor: default;
+  }
+  .bigcell.selected-first .q-slot:not(.selected-slot):hover {
+    background: rgba(44, 62, 50, 0.03); /* 取消 hover 效果 */
+  }
+
+  /* ── Controls ── */
+  #controls {
+    display: flex;
+    gap: 12px;
+  }
+  button {
+    padding: 1.5vh 3vw;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 2vh;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .2s;
+    box-shadow: 0 2px 6px rgba(44, 62, 50, 0.05);
+  }
+  button:hover {
+    background: #EAECE8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(44, 62, 50, 0.1);
+  }
+  button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 4px rgba(44, 62, 50, 0.05);
+  }
+  #btn-reset {
+    color: var(--orange);
+    border-color: rgba(217, 124, 72, 0.3);
+  }
+  #btn-reset:hover {
+    background: rgba(217, 124, 72, 0.1);
+    border-color: var(--orange);
+  }
+
+  /* ── Rules summary ── */
+  #rules {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5vh 1.5vw;
+    font-size: 1.5vh;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  #rules strong { color: var(--text); }
+  #rules .tag-x { color: var(--x-col); font-weight: 700; }
+  #rules .tag-o { color: var(--o-col); font-weight: 700; }
+
+  /* ── History Box ── */
+  #history-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5vh 1.5vw;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #history-list {
+    list-style: none;
+    overflow-y: auto;
+    font-size: 1.5vh;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-top: 1vh;
+    padding-right: 0.5vw;
+  }
+  #history-list li {
+    margin-bottom: 0.8vh;
+    padding-bottom: 0.8vh;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  #history-list li:last-child {
+    border-bottom: none;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  #main-menu {
+    position: fixed; inset: 0;
+    background: rgba(245, 247, 244, 0.2);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+  }
+  #main-menu h1 {
+    font-size: 4.5rem;
+    margin-bottom: 10px;
+    text-shadow: 0 4px 12px rgba(255,255,255,0.8);
+  }
+  #main-menu p {
+    font-size: 1.5rem;
+    color: var(--muted);
+  }
+  .menu-buttons {
+    display: flex;
+    gap: 20px;
+  }
+  .menu-buttons button {
+    font-size: 1.3rem;
+    padding: 18px 50px;
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .menu-buttons button:hover {
+    background: #EAECE8;
+  }
+</style>
+</head>
+<body>
+
+<div id="main-menu">
+  <h1>⚛ 量子圈圈叉叉</h1>
+  <p>請選擇遊戲模式</p>
+  <div class="menu-buttons">
+    <button id="btn-pvp" onclick="startGame('pvp')">👥 雙人本地對戰</button>
+    <button id="btn-pve" onclick="startGame('pve')">🤖 人機對戰 (O)</button>
+  </div>
+</div>
+
+<div id="layout" style="display: none;">
+  <!-- 左側 -->
+  <div id="left-col">
+    <details id="rules" open>
+      <summary style="cursor:pointer;font-weight:600;color:var(--text);margin-bottom:1vh;font-size:1.8vh;">📖 遊戲規則</summary>
+      <div class="rule-line"><strong>1. 量子落子</strong> — 每回合點兩個不同格子（剩一格時可直下）。</div>
+      <div class="rule-line"><strong>2. 糾纏</strong> — 棋子形成糾纏邊。</div>
+      <div class="rule-line"><strong>3. 循環測量</strong> — 形成環時，由<em>對方</em>決定塌縮。</div>
+      <div class="rule-line"><strong>4. 獲勝</strong> — 三個傳統棋子連線即勝。</div>
+      <div class="rule-line"><span class="tag-x">X</span> 先手，<span class="tag-o">O</span> 後手。</div>
+    </details>
+    <div id="history-box">
+      <h3 style="font-size:1.8vh; color:var(--text);">📜 遊戲紀錄</h3>
+      <ul id="history-list"></ul>
+    </div>
+  </div>
+
+  <!-- 中間 -->
+  <div id="center-col">
+    <h1>⚛ 量子圈圈叉叉</h1>
+
+    <div id="status">
+      <div id="status-main">載入中...</div>
+      <div class="hint" id="status-hint"></div>
+    </div>
+
+    <div id="board"></div>
+
+    <div id="controls">
+      <button id="btn-menu">🔙 回主選單</button>
+      <button id="btn-reset">🔄 重新開始</button>
+    </div>
+  </div>
+
+  <!-- 右側 -->
+  <div id="right-col">
+    <div id="panel-o" class="player-panel">
+      <h2>O（圈）</h2>
+      <div class="timer" id="timer-o">--</div>
+      <div class="victory-message" id="victory-o">🏆 勝利！</div>
+    </div>
+    <div id="panel-x" class="player-panel">
+      <h2>X（叉）</h2>
+      <div class="timer" id="timer-x">--</div>
+      <div class="victory-message" id="victory-x">🏆 勝利！</div>
+    </div>
+  </div>
+</div>
+
+<!-- Language Toggle -->
+<div id="lang-toggle" style="position:fixed; top:20px; right:20px; z-index:9999;">
+  <button onclick="toggleLang()" style="padding:8px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--border); color:var(--text); cursor:pointer; font-family:'Nunito', sans-serif; font-weight:700;">🌐 EN / 中文</button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// 全域狀態與 API
+// ─────────────────────────────────────────────────────────────────────────────
+let state = null;
+let gameMode = 'pvp';
+let firstMove = null;
+let turnInterval = null;
+let isAITurn = false;
+let prevStatus = null;
+let prevMoveCount = 0;
+let currentLang = 'zh';
+
+const i18n = {
+  en: {
+    menu_title: "⚛ Quantum Tic-Tac-Toe",
+    menu_subtitle: "Select Game Mode",
+    btn_pvp: "👥 Local PvP",
+    btn_pve: "🤖 vs AI (O)",
+    rules_title: "📖 Rules",
+    rule_1: "<strong>1. Quantum Move</strong> — Pick 2 different cells each turn.",
+    rule_2: "<strong>2. Entanglement</strong> — Pieces form cyclic graphs.",
+    rule_3: "<strong>3. Collapse</strong> — When a cycle forms, the <em>other</em> player chooses how it collapses.",
+    rule_4: "<strong>4. Victory</strong> — Connect 3 classical marks to win.",
+    rule_5: "<span class='tag-x'>X</span> goes first, <span class='tag-o'>O</span> goes second.",
+    history_title: "📜 History",
+    center_title: "⚛ Quantum Tic-Tac-Toe",
+    status_loading: "Loading...",
+    btn_menu: "🔙 Main Menu",
+    btn_reset: "🔄 Restart",
+    o_title: "O",
+    x_title: "X",
+    victory_text: "🏆 Victory!",
+    turn_x: '<span class="player-x">X</span>\'s turn',
+    turn_o: '<span class="player-o">O</span>\'s turn',
+    prompt_place: " — Pick 2 cells to place a quantum mark",
+    first_move_hint: "Selected cell {c} slot {s}, pick a second cell",
+    move_count_hint: "Move count: {n}",
+    collapse_title: "⚡ Cyclic Entanglement!<br>{chooser} decides the collapse",
+    collapse_hint: "{maker} created a cycle. Click a blinking GREEN piece to lock it into that cell!",
+    game_over: "Game Over!",
+    win_lines: "Congratulations {winner}, 3 in a row!",
+    win_full: "Board full! {winner} wins by lower max subscript!",
+    win_timeout: "Opponent timed out!",
+    win_tie_breaker: "Simultaneous lines! {winner} wins by lower max subscript!",
+    draw: "🤝 Draw! Board is full!",
+    err_same_cell: "Two marks cannot be in the same big cell",
+    err_multiple_cycle: "Multiple entangled pieces here.\n👉 Click the specific blinking GREEN piece!",
+    err_not_cycle: "This piece is not in the cycle. 👉 Click a blinking GREEN piece!",
+    hist_place: "Move {m}: {p} placed on {c1} & {c2}",
+    hist_place_same: "Move {m}: {p} placed on {c1} (Auto)",
+    hist_collapse: "⚠️ {c} collapsed {p} into cell {cell}"
+  },
+  zh: {
+    menu_title: "⚛ 量子圈圈叉叉",
+    menu_subtitle: "請選擇遊戲模式",
+    btn_pvp: "👥 雙人本地對戰",
+    btn_pve: "🤖 人機對戰 (O)",
+    rules_title: "📖 遊戲規則",
+    rule_1: "<strong>1. 量子落子</strong> — 每回合點兩個不同格子（剩一格時可直下）。",
+    rule_2: "<strong>2. 糾纏</strong> — 棋子形成糾纏邊。",
+    rule_3: "<strong>3. 循環測量</strong> — 形成環時，由<em>對方</em>決定塌縮。",
+    rule_4: "<strong>4. 獲勝</strong> — 三個傳統棋子連線即勝。",
+    rule_5: "<span class='tag-x'>X</span> 先手，<span class='tag-o'>O</span> 後手。",
+    history_title: "📜 遊戲紀錄",
+    center_title: "⚛ 量子圈圈叉叉",
+    status_loading: "載入中...",
+    btn_menu: "🔙 回主選單",
+    btn_reset: "🔄 重新開始",
+    o_title: "O（圈）",
+    x_title: "X（叉）",
+    victory_text: "🏆 勝利！",
+    turn_x: '<span class="player-x">X（叉）</span> 的回合',
+    turn_o: '<span class="player-o">O（圈）</span> 的回合',
+    prompt_place: " — 請點兩個格子放置量子棋子",
+    first_move_hint: "已選格子 {c} 的小格 {s}，再選第二個格子",
+    move_count_hint: "移動次數：{n}",
+    collapse_title: "⚡ 循環糾纏！<br>{chooser} 決定塌縮方向",
+    collapse_hint: "{maker} 製造了環，請直接點選發出綠色閃光的「小棋子」來決定它要留在哪個格子！",
+    game_over: "遊戲結束！",
+    win_lines: "恭喜 {winner} 連成三線！",
+    win_full: "棋盤已滿，{winner} 的最大下標較小！",
+    win_timeout: "對手超時！",
+    win_tie_breaker: "雙方同時連線，{winner} 的最大下標較小！",
+    draw: "🤝 平局！棋盤已滿！",
+    err_same_cell: "兩格不能在同一個大格子裡",
+    err_multiple_cycle: "一個格子內可能有多個糾纏棋子。\n👉 請直接點選「發出綠色閃光的小棋子」，指定要把它留在這個格子內！",
+    err_not_cycle: "這個棋子不在目前的糾纏環中，👉 請點選發出綠色閃光的小棋子！",
+    hist_place: "第 {m} 步：{p} 放於格子 {c1} 與 {c2}",
+    hist_place_same: "第 {m} 步：{p} 放置於 {c1}",
+    hist_collapse: "⚠️ {c} 選擇讓 {p} 塌縮至格子 {cell}"
+  }
+};
+
+function t(key, params = {}) {
+  let str = i18n[currentLang][key] || key;
+  for (const [k, v] of Object.entries(params)) {
+    str = str.replace(`{${k}}`, v);
+  }
+  return str;
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'zh' ? 'en' : 'zh';
+  updateUITexts();
+  playSound('click');
+  if (state) render(state);
+}
+
+function updateUITexts() {
+  document.querySelector('#main-menu h1').innerHTML = t('menu_title');
+  document.querySelector('#main-menu p').textContent = t('menu_subtitle');
+  document.querySelector('#btn-pvp').textContent = t('btn_pvp');
+  document.querySelector('#btn-pve').textContent = t('btn_pve');
+  
+  document.querySelector('#rules summary').innerHTML = t('rules_title');
+  const rulesLines = document.querySelectorAll('#rules .rule-line');
+  if(rulesLines.length >= 5) {
+      rulesLines[0].innerHTML = t('rule_1');
+      rulesLines[1].innerHTML = t('rule_2');
+      rulesLines[2].innerHTML = t('rule_3');
+      rulesLines[3].innerHTML = t('rule_4');
+      rulesLines[4].innerHTML = t('rule_5');
+  }
+
+  document.querySelector('#history-box h3').textContent = t('history_title');
+  document.querySelector('#center-col h1').innerHTML = t('center_title');
+  document.querySelector('#btn-menu').textContent = t('btn_menu');
+  document.querySelector('#btn-reset').textContent = t('btn_reset');
+  document.querySelector('#panel-o h2').textContent = t('o_title');
+  document.querySelector('#panel-x h2').textContent = t('x_title');
+  document.querySelectorAll('.victory-message').forEach(el => {
+    if(!el.classList.contains('show')) el.innerHTML = t('victory_text');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 音效管理 (Web Audio API)
+// ─────────────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const playSound = (type) => {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+
+  if (type === 'click') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } else if (type === 'place') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(400, now);
+    osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  } else if (type === 'collapse') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.4);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } else if (type === 'win') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(400, now);
+    osc.frequency.setValueAtTime(600, now + 0.1);
+    osc.frequency.setValueAtTime(800, now + 0.2);
+    osc.frequency.setValueAtTime(1200, now + 0.3);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.6);
+    osc.start(now);
+    osc.stop(now + 0.6);
+  }
+};
+
+let timeLeft = 60;
+let activeTimerPlayer = null;
+
+function startTimer(player) {
+  if (activeTimerPlayer === player && turnInterval !== null) {
+      return; 
+  }
+  clearInterval(turnInterval);
+  activeTimerPlayer = player;
+  timeLeft = 60;
+  updateTimerDisplay();
+  
+  turnInterval = setInterval(async () => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(turnInterval);
+      const res = await api('/api/timeout', {});
+      if (res.state) {
+          render(res.state);
+      }
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  document.getElementById('timer-o').textContent = (activeTimerPlayer === 'O') ? timeLeft + 's' : '--';
+  document.getElementById('timer-x').textContent = (activeTimerPlayer === 'X') ? timeLeft + 's' : '--';
+}
+
+function manageTurnTimer(s) {
+    if (s.status === 'finished') {
+        clearInterval(turnInterval);
+        activeTimerPlayer = null;
+        updateTimerDisplay();
+        document.getElementById('panel-o').classList.remove('active', 'active-o');
+        document.getElementById('panel-x').classList.remove('active');
+        return;
+    }
+    
+    let activePlayer = null;
+    if (s.status === 'playing') {
+        activePlayer = s.current_player;
+    } else if (s.status === 'collapse') {
+        activePlayer = s.pending.choosing_player;
+    }
+    
+    if (activePlayer) {
+        startTimer(activePlayer);
+    }
+    
+    document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
+    document.getElementById('panel-x').classList.toggle('active', activePlayer === 'X');
+
+    if (gameMode === 'pve' && activePlayer === 'O' && s.status !== 'finished') {
+        isAITurn = true;
+        setTimeout(async () => {
+            const res = await api('/api/ai_move', {});
+            if (res.state) render(res.state);
+        }, 1000);
+    } else {
+        isAITurn = false;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API helpers
+// ─────────────────────────────────────────────────────────────────────────────
+async function api(path, body = null) {
+  const opts = body
+    ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
+    : { method: 'GET' };
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 初始化棋盤 DOM
+// ─────────────────────────────────────────────────────────────────────────────
+function initBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'bigcell';
+    cell.id = `cell-${i}`;
+    cell.addEventListener('click', () => onBigCellClick(i));
+    board.appendChild(cell);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 渲染
+// ─────────────────────────────────────────────────────────────────────────────
+function render(s_state) {
+  state = s_state;
+
+  if (prevStatus === 'playing' && state.status === 'collapse') {
+      playSound('collapse');
+  } else if (state.status === 'playing' && state.move_count > prevMoveCount) {
+      playSound('place');
+  } else if (state.status === 'finished' && prevStatus !== 'finished') {
+      playSound('win');
+  } else if (state.status === 'playing' && state.move_count === prevMoveCount && prevStatus === 'collapse') {
+      playSound('place');
+  }
+  
+  if (state.status !== 'finished') {
+      document.getElementById('victory-o').classList.remove('show');
+      document.getElementById('victory-x').classList.remove('show');
+  }
+  manageTurnTimer(state);
+
+  const statusMain = document.getElementById('status-main');
+  const statusHint = document.getElementById('status-hint');
+  const boardEl = document.getElementById('board');
+
+  prevStatus = state.status;
+  prevMoveCount = state.move_count;
+
+  if (state.status === 'collapse') {
+      boardEl.classList.add('collapse-mode');
+  } else {
+      boardEl.classList.remove('collapse-mode');
+  }
+
+  state.cells.forEach((c, i) => {
+    const el = document.getElementById(`cell-${i}`);
+    el.className = 'bigcell';
+    el.innerHTML = '';
+
+    if (c.type === 'classical') {
+      el.classList.add('classical');
+      el.innerHTML = `<div class="classical-mark ${c.player.toLowerCase()}">
+        ${c.player}<sub>${c.id}</sub>
+      </div>`;
+    } else {
+      // 量子棋子：填入 3×3 子格
+      const grid = document.createElement('div');
+      grid.className = 'quantum-grid';
+      const slots = 9;
+      const marks = c.quantum;
+      for (let s = 0; s < slots; s++) {
+        const slot = document.createElement('div');
+        slot.className = 'q-slot';
+        slot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onSlotClick(i, s);
+        });
+        if (marks[s]) {
+          const m = marks[s];
+          slot.classList.add(m.player.toLowerCase());
+          slot.innerHTML = `${m.player}<sub>${m.id}</sub>`;
+          if (s_state.status === 'collapse' && s_state.pending && s_state.pending.cycle_pieces && s_state.pending.cycle_pieces.includes(m.id)) {
+            slot.classList.add('highlight-slot');
+          }
+        }
+        grid.appendChild(slot);
+      }
+      el.appendChild(grid);
+    }
+
+    // 標記勝利格
+    if (state.winning_lines.some(line => line.includes(i))) {
+      el.classList.add('winning');
+    }
+  });
+
+  // ── 狀態列 ──
+  if (state.status === 'playing') {
+    const px = state.current_player === 'X' ? t('turn_x') : t('turn_o');
+    statusMain.innerHTML = `${px}${t('prompt_place')}`;
+    if (firstMove !== null) {
+      statusHint.textContent = t('first_move_hint', { c: firstMove.c, s: firstMove.s });
+    } else {
+      statusHint.textContent = t('move_count_hint', { n: state.move_count });
+    }
+    // 清除塌縮高亮
+    document.querySelectorAll('.highlight-collapse').forEach(e => e.classList.remove('highlight-collapse'));
+    // 選中高亮
+    document.querySelectorAll('.selected-first').forEach(e => e.classList.remove('selected-first'));
+    document.querySelectorAll('.selected-slot').forEach(e => e.classList.remove('selected-slot'));
+    if (firstMove !== null) {
+      const bcell = document.getElementById(`cell-${firstMove.c}`);
+      if (bcell) {
+        bcell.classList.add('selected-first');
+        const slots = bcell.querySelectorAll('.q-slot');
+        if (slots[firstMove.s]) slots[firstMove.s].classList.add('selected-slot');
+      }
+    }
+
+  } else if (state.status === 'collapse') {
+    const pd = state.pending;
+    const chooser = pd.choosing_player === 'X' ? '<span class="player-x">X</span>' : '<span class="player-o">O</span>';
+    const maker = pd.choosing_player === 'X' ? 'O' : 'X';
+    statusMain.innerHTML = t('collapse_title', { chooser });
+    statusHint.textContent = t('collapse_hint', { maker });
+
+    // 高亮可選的塌縮格，我們現在只靠小棋子發光，不再高亮大格子以免誤導
+    firstMove = null;
+
+  } else if (state.status === 'finished') {
+    showGameOver(state.winner);
+  }
+
+  // 渲染歷史紀錄
+  const hl = document.getElementById('history-list');
+  hl.innerHTML = '';
+  if (state.history) {
+      state.history.forEach(evt => {
+          let msg = '';
+          if (evt.type === 'place') {
+              msg = t('hist_place', { m: evt.move, p: evt.piece, c1: evt.c1, c2: evt.c2 });
+          } else if (evt.type === 'place_classical') {
+              msg = t('hist_place_same', { m: evt.move, p: evt.piece, c1: evt.cell });
+          } else if (evt.type === 'resolve') {
+              msg = t('hist_collapse', { c: evt.chooser, p: evt.piece, cell: evt.cell });
+          } else {
+              msg = evt.type;
+          }
+          const li = document.createElement('li');
+          li.textContent = msg;
+          hl.appendChild(li);
+      });
+      hl.scrollTop = hl.scrollHeight;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 點格子
+// ─────────────────────────────────────────────────────────────────────────────
+async function onBigCellClick(idx) {
+  if (!state || isAITurn) return;
+
+  // ── 塌縮模式 ──
+  if (state.status === 'collapse') {
+    // 塌縮時完全忽略大格子的點擊，強制玩家點擊綠色發光的小棋子
+    return;
+  }
+  
+  if (state.status === 'playing' && firstMove !== null && firstMove.c === idx) {
+      firstMove = null;
+      render(state);
+  }
+}
+
+async function onSlotClick(c, s) {
+  if (!state || isAITurn) return;
+  if (state.status === 'collapse') {
+    const mark = state.cells[c].quantum[s];
+    const pd = state.pending;
+    if (mark && pd.cycle_pieces && pd.cycle_pieces.includes(mark.id)) {
+        const res = await api('/api/resolve', { piece_id: mark.id, chosen_cell: c });
+        if (res.error) alert(res.error);
+        else render(res.state);
+    }
+    return;
+  }
+  if (state.status !== 'playing') return;
+  const cell = state.cells[c];
+  if (cell.type === 'classical') return;   // 不能點傳統格
+  if (cell.quantum[s]) return; // 已有棋子
+
+  if (firstMove === null) {
+    let nonClassicalCount = 0;
+    for (let i = 0; i < 9; i++) {
+        if (state.cells[i].type !== 'classical') nonClassicalCount++;
+    }
+    if (nonClassicalCount === 1) {
+        let dummyS = (s + 1) % 9;
+        while (state.cells[c].quantum[dummyS]) {
+            dummyS = (dummyS + 1) % 9;
+        }
+        const res = await api('/api/place', { c1: c, s1: s, c2: c, s2: dummyS });
+        if (!res.ok) alert(res.error);
+        render(res.state);
+        return;
+    }
+
+    firstMove = { c, s };
+    playSound('click');
+    render(state);
+  } else {
+    if (firstMove.c === c && firstMove.s === s) {
+      firstMove = null;
+      playSound('click');
+      render(state);
+      return;
+    }
+    if (c === firstMove.c) {
+      firstMove = null;
+      playSound('click');
+      render(state);
+      return;
+    }
+    const { c: c1, s: s1 } = firstMove;
+    firstMove = null;
+    const res = await api('/api/place', { c1, s1, c2: c, s2: s });
+    if (!res.ok) {
+      alert(res.error);
+    }
+    render(res.state);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game over
+// ─────────────────────────────────────────────────────────────────────────────
+function showGameOver(winner) {
+  document.getElementById('status-main').innerHTML = t('game_over');
+  document.getElementById('status-hint').textContent = '';
+  
+  const vo = document.getElementById('victory-o');
+  const vx = document.getElementById('victory-x');
+  vo.classList.remove('show');
+  vx.classList.remove('show');
+
+  if (winner === 'X' || winner === 'O') {
+    const target = winner === 'X' ? vx : vo;
+    let msg = t('win_lines', { winner });
+    if (state && state.winning_lines) {
+      if (state.winning_lines.length === 0) {
+        msg = state.cells.every(c => c.type === 'classical') 
+            ? t('win_full', { winner })
+            : t('win_timeout');
+      } else {
+        let hasX = false, hasO = false;
+        for (const line of state.winning_lines) {
+          const p = state.cells[line[0]].player;
+          if (p === 'X') hasX = true;
+          if (p === 'O') hasO = true;
+        }
+        if (hasX && hasO) {
+          msg = t('win_tie_breaker', { winner });
+        }
+      }
+    }
+    target.innerHTML = `🏆 ${t('victory_text')}<br>${msg}`;
+    target.classList.add('show');
+  } else {
+    document.getElementById('status-main').innerHTML = t('draw');
+  }
+}
+
+async function resetGame() {
+  firstMove = null;
+  const res = await api('/api/reset', { mode: gameMode });
+  render(res.state);
+}
+
+async function startGame(mode) {
+  playSound('click');
+  gameMode = mode;
+  document.getElementById('main-menu').style.display = 'none';
+  document.getElementById('layout').style.display = 'flex';
+  resetGame();
+}
+
+document.getElementById('btn-menu').addEventListener('click', () => {
+  playSound('click');
+  document.getElementById('main-menu').style.display = 'flex';
+  document.getElementById('layout').style.display = 'none';
+  clearInterval(turnInterval);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 啟動
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  playSound('click');
+  resetGame();
+});
+
+initBoard();
+// 剛載入時停在主選單，初始化語言
+updateUITexts();
+</script>
+</body>
+</html>
