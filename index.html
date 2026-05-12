@@ -383,6 +383,61 @@
   .menu-buttons button:hover {
     background: #EAECE8;
   }
+
+  /* ── 響應式設計 Responsive ── */
+  @media (max-width: 1024px) {
+    body {
+      height: auto;
+      overflow-y: auto;
+      padding: 6vh 0;
+    }
+    #layout {
+      flex-direction: column;
+      align-items: center;
+      gap: 4vh;
+    }
+    #center-col {
+      order: 1;
+      width: 95vw;
+    }
+    #right-col {
+      order: 2;
+      flex-direction: row;
+      width: 95vw;
+      justify-content: center;
+      gap: 3vw;
+    }
+    .player-panel {
+      width: 45vw;
+      padding: 2vh 1vw;
+    }
+    #left-col {
+      order: 3;
+      width: 95vw;
+    }
+    #status {
+      min-width: unset;
+      width: 100%;
+    }
+    .bigcell {
+      width: 30vw;
+      height: 30vw;
+    }
+    .classical-mark {
+      font-size: 20vw;
+    }
+  }
+  @media (max-width: 600px) {
+    #main-menu h1 {
+      font-size: 2.5rem;
+      text-align: center;
+      line-height: 1.2;
+    }
+    #lang-toggle {
+      top: 10px;
+      right: 10px;
+    }
+  }
 </style>
 </head>
 <body>
