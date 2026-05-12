@@ -913,8 +913,9 @@ async function onSlotClick(c, s) {
   if (!state || isAITurn) return;
   if (state.status === 'collapse') {
     if (playerRole === 'Spectator') return;
-    const mark = state.cells[c].quantum[s];
     const pd = state.pending;
+    if (gameMode === 'pvp' && playerRole !== pd.choosing_player) return;
+    const mark = state.cells[c].quantum[s];
     if (mark && pd.cycle_pieces && pd.cycle_pieces.includes(mark.id)) {
         const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
         if (res.error) alert(res.error);
@@ -923,6 +924,7 @@ async function onSlotClick(c, s) {
     return;
   }
   if (state.status !== 'playing' || playerRole === 'Spectator') return;
+  if (gameMode === 'pvp' && playerRole !== state.current_player) return;
   const cell = state.cells[c];
   if (cell.type === 'classical') return;   // 不能點傳統格
   if (cell.quantum[s]) return; // 已有棋子

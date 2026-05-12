@@ -80,7 +80,9 @@ def place(room_id: str, body: PlaceBody):
     if r.mode == "pvp":
         cp = r.game.current_player
         expected = r.x if cp == "X" else r.o
-        if expected and expected != body.client_id:
+        if expected is None:
+            return JSONResponse({"error": "等待對手加入..."}, status_code=403)
+        if expected != body.client_id:
             return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
             
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
@@ -100,7 +102,9 @@ def resolve(room_id: str, body: ResolveBody):
         cp = r.game.pending.get("choosing_player") if r.game.pending else None
         if cp:
             expected = r.x if cp == "X" else r.o
-            if expected and expected != body.client_id:
+            if expected is None:
+                return JSONResponse({"error": "等待對手加入..."}, status_code=403)
+            if expected != body.client_id:
                 return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
                 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
