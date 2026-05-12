@@ -390,9 +390,13 @@
 <div id="main-menu">
   <h1>⚛ 量子圈圈叉叉</h1>
   <p>請選擇遊戲模式</p>
-  <div class="menu-buttons">
-    <button id="btn-pvp" onclick="startGame('pvp')">👥 雙人本地對戰</button>
-    <button id="btn-pve" onclick="startGame('pve')">🤖 人機對戰 (O)</button>
+  <div class="menu-buttons" style="flex-direction: column; gap: 15px; align-items: center;">
+    <button id="btn-pvp" onclick="createRoom('pvp')" style="width: 100%;">➕ 建立對戰房間</button>
+    <button id="btn-pve" onclick="createRoom('pve')" style="width: 100%;">🤖 人機對戰 (O)</button>
+    <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%;">
+        <input type="text" id="join-room-id" placeholder="房間號碼" style="padding: 18px 20px; font-size: 1.3rem; border-radius:12px; border:1px solid var(--border); flex: 1; outline: none;">
+        <button onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
+    </div>
   </div>
 </div>
 
@@ -418,6 +422,7 @@
     <h1>⚛ 量子圈圈叉叉</h1>
 
     <div id="status">
+      <div style="font-size: 1.5vh; color: var(--muted); margin-bottom: 5px; font-weight: bold;" id="room-info"></div>
       <div id="status-main">載入中...</div>
       <div class="hint" id="status-hint"></div>
     </div>
@@ -458,16 +463,25 @@ let state = null;
 let gameMode = 'pvp';
 let firstMove = null;
 let turnInterval = null;
+let pollInterval = null;
 let isAITurn = false;
 let prevStatus = null;
 let prevMoveCount = 0;
 let currentLang = 'zh';
 
+let clientId = localStorage.getItem('qttt_client_id');
+if (!clientId) {
+    clientId = Math.random().toString(36).substring(2);
+    localStorage.setItem('qttt_client_id', clientId);
+}
+let roomId = null;
+let playerRole = null; // 'X', 'O', 'Spectator'
+
 const i18n = {
   en: {
     menu_title: "⚛ Quantum Tic-Tac-Toe",
     menu_subtitle: "Select Game Mode",
-    btn_pvp: "👥 Local PvP",
+    btn_pvp: "➕ Create Room",
     btn_pve: "🤖 vs AI (O)",
     rules_title: "📖 Rules",
     rule_1: "<strong>1. Quantum Move</strong> — Pick 2 different cells each turn.",
@@ -506,7 +520,7 @@ const i18n = {
   zh: {
     menu_title: "⚛ 量子圈圈叉叉",
     menu_subtitle: "請選擇遊戲模式",
-    btn_pvp: "👥 雙人本地對戰",
+    btn_pvp: "➕ 建立對戰房間",
     btn_pve: "🤖 人機對戰 (O)",
     rules_title: "📖 遊戲規則",
     rule_1: "<strong>1. 量子落子</strong> — 每回合點兩個不同格子（剩一格時可直下）。",
@@ -652,9 +666,9 @@ function startTimer(player) {
     updateTimerDisplay();
     if (timeLeft <= 0) {
       clearInterval(turnInterval);
-      const res = await api('/api/timeout', {});
-      if (res.state) {
-          render(res.state);
+      if (playerRole === activeTimerPlayer || gameMode === 'pve') {
+        const res = await api('/api/timeout/' + roomId, {});
+        if (res.state) render(res.state);
       }
     }
   }, 1000);
@@ -691,10 +705,12 @@ function manageTurnTimer(s) {
 
     if (gameMode === 'pve' && activePlayer === 'O' && s.status !== 'finished') {
         isAITurn = true;
-        setTimeout(async () => {
-            const res = await api('/api/ai_move', {});
-            if (res.state) render(res.state);
-        }, 1000);
+        if (playerRole === 'X') {
+            setTimeout(async () => {
+                const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
+                if (res.state) render(res.state);
+            }, 1000);
+        }
     } else {
         isAITurn = false;
     }
@@ -704,11 +720,19 @@ function manageTurnTimer(s) {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 async function api(path, body = null) {
+  if (body && typeof body === 'object') {
+      body.client_id = clientId;
+  }
   const opts = body
     ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
     : { method: 'GET' };
-  const r = await fetch(path, opts);
-  return r.json();
+  try {
+      const r = await fetch(path, opts);
+      return await r.json();
+  } catch (e) {
+      console.error(e);
+      return { error: 'Network error' };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -884,16 +908,17 @@ async function onBigCellClick(idx) {
 async function onSlotClick(c, s) {
   if (!state || isAITurn) return;
   if (state.status === 'collapse') {
+    if (playerRole === 'Spectator') return;
     const mark = state.cells[c].quantum[s];
     const pd = state.pending;
     if (mark && pd.cycle_pieces && pd.cycle_pieces.includes(mark.id)) {
-        const res = await api('/api/resolve', { piece_id: mark.id, chosen_cell: c });
+        const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
         if (res.error) alert(res.error);
         else render(res.state);
     }
     return;
   }
-  if (state.status !== 'playing') return;
+  if (state.status !== 'playing' || playerRole === 'Spectator') return;
   const cell = state.cells[c];
   if (cell.type === 'classical') return;   // 不能點傳統格
   if (cell.quantum[s]) return; // 已有棋子
@@ -908,9 +933,12 @@ async function onSlotClick(c, s) {
         while (state.cells[c].quantum[dummyS]) {
             dummyS = (dummyS + 1) % 9;
         }
-        const res = await api('/api/place', { c1: c, s1: s, c2: c, s2: dummyS });
-        if (!res.ok) alert(res.error);
-        render(res.state);
+        const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
+        if (!res.ok) {
+            if(res.error) alert(res.error);
+        } else {
+            render(res.state);
+        }
         return;
     }
 
@@ -932,11 +960,12 @@ async function onSlotClick(c, s) {
     }
     const { c: c1, s: s1 } = firstMove;
     firstMove = null;
-    const res = await api('/api/place', { c1, s1, c2: c, s2: s });
+    const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
     if (!res.ok) {
-      alert(res.error);
+      if(res.error) alert(res.error);
+    } else {
+      render(res.state);
     }
-    render(res.state);
   }
 }
 
@@ -980,17 +1009,49 @@ function showGameOver(winner) {
 }
 
 async function resetGame() {
+  if (playerRole === 'Spectator') return alert("觀戰者無法重新開始");
   firstMove = null;
-  const res = await api('/api/reset', { mode: gameMode });
-  render(res.state);
+  const res = await api('/api/reset/' + roomId, {});
+  if (res.error) alert(res.error);
+  else render(res.state);
 }
 
-async function startGame(mode) {
+function enterGame(initialState) {
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('layout').style.display = 'flex';
+    document.getElementById('room-info').textContent = `Room: ${roomId} | Role: ${playerRole}`;
+    render(initialState);
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(pollState, 1000);
+}
+
+async function pollState() {
+    if (!roomId) return;
+    const res = await api(`/api/state/${roomId}`);
+    if (res.error) return; 
+    if (res.move_count > prevMoveCount || res.status !== prevStatus) {
+        render(res);
+    }
+}
+
+async function createRoom(mode) {
   playSound('click');
+  const res = await api('/api/create_room', { mode: mode });
+  roomId = res.room_id;
+  playerRole = res.role;
   gameMode = mode;
-  document.getElementById('main-menu').style.display = 'none';
-  document.getElementById('layout').style.display = 'flex';
-  resetGame();
+  enterGame(res.state);
+}
+
+async function joinRoom() {
+  playSound('click');
+  const rid = document.getElementById('join-room-id').value.trim();
+  if (!rid) return alert("請輸入房間號碼 / Enter Room ID");
+  const res = await api('/api/join_room', { room_id: rid });
+  if (res.error) return alert(res.error);
+  roomId = rid;
+  playerRole = res.role;
+  enterGame(res.state);
 }
 
 document.getElementById('btn-menu').addEventListener('click', () => {
@@ -998,6 +1059,9 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   document.getElementById('main-menu').style.display = 'flex';
   document.getElementById('layout').style.display = 'none';
   clearInterval(turnInterval);
+  if (pollInterval) clearInterval(pollInterval);
+  roomId = null;
+  playerRole = null;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,76 +1,146 @@
 """
 server.py — Quantum Tic-Tac-Toe 極簡後端
 =========================================
-本地兩人對戰（同一台電腦），不需要 WebSocket。
-透過 REST API 傳遞遊戲狀態。
+本地/線上聯機對戰，開房加房觀戰功能。
 """
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+import random
 
-from game_logic import QuantumGame
+from game_logic import QuantumGame, GameStatus
 
-app  = FastAPI(title="Quantum Tic-Tac-Toe")
-game = QuantumGame()
+app = FastAPI(title="Quantum Tic-Tac-Toe")
 
+class RoomState:
+    def __init__(self, mode):
+        self.game = QuantumGame()
+        self.mode = mode
+        self.x = None
+        self.o = None
+
+rooms = {}
 
 # ── HTTP ──────────────────────────────────────────────────────────────────────
 
+class CreateRoomBody(BaseModel):
+    mode: str = "pvp"
+    client_id: str
 
-@app.get("/api/state")
-def state():
-    return JSONResponse(game.get_state())
+@app.post("/api/create_room")
+def create_room(body: CreateRoomBody):
+    room_id = str(random.randint(1000, 9999))
+    while room_id in rooms:
+        room_id = str(random.randint(1000, 9999))
+    r = RoomState(body.mode)
+    r.x = body.client_id
+    rooms[room_id] = r
+    return JSONResponse({"room_id": room_id, "role": "X", "state": r.game.get_state()})
 
+class JoinRoomBody(BaseModel):
+    room_id: str
+    client_id: str
+
+@app.post("/api/join_room")
+def join_room(body: JoinRoomBody):
+    if body.room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[body.room_id]
+    if r.x == body.client_id:
+        role = "X"
+    elif r.o == body.client_id:
+        role = "O"
+    elif r.o is None and r.mode == "pvp" and r.x != body.client_id:
+        r.o = body.client_id
+        role = "O"
+    else:
+        role = "Spectator"
+    return JSONResponse({"role": role, "state": r.game.get_state()})
+
+@app.get("/api/state/{room_id}")
+def get_state(room_id: str):
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    return JSONResponse(rooms[room_id].game.get_state())
 
 class PlaceBody(BaseModel):
+    client_id: str
     c1: int
     s1: int
     c2: int
     s2: int
 
-
-@app.post("/api/place")
-def place(body: PlaceBody):
-    result = game.place(body.c1, body.s1, body.c2, body.s2)
-    return JSONResponse({**result, "state": game.get_state()})
-
+@app.post("/api/place/{room_id}")
+def place(room_id: str, body: PlaceBody):
+    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    
+    if r.mode == "pvp":
+        cp = r.game.current_player
+        expected = r.x if cp == "X" else r.o
+        if expected and expected != body.client_id:
+            return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
+            
+    result = r.game.place(body.c1, body.s1, body.c2, body.s2)
+    return JSONResponse({**result, "state": r.game.get_state()})
 
 class ResolveBody(BaseModel):
+    client_id: str
     piece_id: int
     chosen_cell: int
 
+@app.post("/api/resolve/{room_id}")
+def resolve(room_id: str, body: ResolveBody):
+    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    
+    if r.mode == "pvp":
+        cp = r.game.pending.get("choosing_player") if r.game.pending else None
+        if cp:
+            expected = r.x if cp == "X" else r.o
+            if expected and expected != body.client_id:
+                return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
+                
+    result = r.game.resolve(body.piece_id, body.chosen_cell)
+    return JSONResponse({**result, "state": r.game.get_state()})
 
-@app.post("/api/resolve")
-def resolve(body: ResolveBody):
-    result = game.resolve(body.piece_id, body.chosen_cell)
-    return JSONResponse({**result, "state": game.get_state()})
+class TimeoutBody(BaseModel):
+    client_id: str
 
-
-@app.post("/api/timeout")
-def timeout():
-    from game_logic import GameStatus
+@app.post("/api/timeout/{room_id}")
+def timeout(room_id: str, body: TimeoutBody):
+    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    game = r.game
     if game.status != GameStatus.FINISHED:
         timed_out = game.pending["choosing_player"] if game.status == GameStatus.COLLAPSE else game.current_player
         game.status = GameStatus.FINISHED
         game.winner = "O" if timed_out == "X" else "X"
         game.winning_lines = []
+    return JSONResponse({"state": game.get_state()})
+
 class ResetBody(BaseModel):
-    mode: str = "pvp"
+    client_id: str
 
-@app.post("/api/reset")
-def reset(body: ResetBody):
-    global game, game_mode
-    game = QuantumGame()
-    game_mode = body.mode
-    return JSONResponse({"ok": True, "state": game.get_state()})
+@app.post("/api/reset/{room_id}")
+def reset(room_id: str, body: ResetBody):
+    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    if r.mode == "pvp" and body.client_id not in (r.x, r.o):
+        return JSONResponse({"error": "觀戰者無法重新開始"}, status_code=403)
+    r.game = QuantumGame()
+    return JSONResponse({"ok": True, "state": r.game.get_state()})
 
-@app.post("/api/ai_move")
-def ai_move():
-    from game_logic import GameStatus
-    import random
-    
+class AIMoveBody(BaseModel):
+    client_id: str
+
+@app.post("/api/ai_move/{room_id}")
+def ai_move(room_id: str, body: AIMoveBody):
+    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    game = r.game
     if game.status == GameStatus.PLAYING:
         valid_spots = []
         for i in range(9):
@@ -100,7 +170,6 @@ def ai_move():
             game.resolve(pid, chosen_cell)
 
     return JSONResponse({"ok": True, "state": game.get_state()})
-
 
 # ── 啟動 ──────────────────────────────────────────────────────────────────────
 
