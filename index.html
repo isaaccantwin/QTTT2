@@ -494,6 +494,7 @@ const i18n = {
     history_title: "📜 History",
     center_title: "⚛ Quantum Tic-Tac-Toe",
     status_loading: "Loading...",
+    waiting_opponent: "⏳ Waiting for opponent to join...",
     btn_menu: "🔙 Main Menu",
     btn_reset: "🔄 Restart",
     o_title: "O",
@@ -534,6 +535,7 @@ const i18n = {
     history_title: "📜 遊戲紀錄",
     center_title: "⚛ 量子圈圈叉叉",
     status_loading: "載入中...",
+    waiting_opponent: "⏳ 等待對手加入...",
     btn_menu: "🔙 回主選單",
     btn_reset: "🔄 重新開始",
     o_title: "O（圈）",
@@ -836,7 +838,12 @@ function render(s_state) {
   });
 
   // ── 狀態列 ──
-  if (state.status === 'playing') {
+  if (!state.players_ready) {
+    statusMain.innerHTML = t('waiting_opponent');
+    statusHint.textContent = '';
+    document.querySelectorAll('.selected-first').forEach(e => e.classList.remove('selected-first'));
+    document.querySelectorAll('.selected-slot').forEach(e => e.classList.remove('selected-slot'));
+  } else if (state.status === 'playing') {
     const px = state.current_player === 'X' ? t('turn_x') : t('turn_o');
     statusMain.innerHTML = `${px}${t('prompt_place')}`;
     if (firstMove !== null) {
