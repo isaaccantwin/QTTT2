@@ -16,10 +16,31 @@ app = FastAPI(title="Quantum Tic-Tac-Toe")
 
 class RoomState:
     def __init__(self, mode):
+        import time
         self.game = QuantumGame()
         self.mode = mode
         self.x = None
         self.o = None
+        self.last_move_count = 0
+        self.last_status = "playing"
+        self.turn_start_time = time.time()
+
+    def get_state(self):
+        import time
+        st = self.game.get_state()
+        # Check if turn changed to reset timer
+        if st["move_count"] != self.last_move_count or st["status"] != self.last_status:
+            self.last_move_count = st["move_count"]
+            self.last_status = st["status"]
+            self.turn_start_time = time.time()
+        
+        elapsed = time.time() - self.turn_start_time
+        time_left = max(0, int(60 - elapsed))
+        if st["status"] == "finished":
+            time_left = 0
+            
+        st["time_left"] = time_left
+        return st
 
 rooms = {}
 
@@ -37,7 +58,7 @@ def create_room(body: CreateRoomBody):
     r = RoomState(body.mode)
     r.x = body.client_id
     rooms[room_id] = r
-    return JSONResponse({"room_id": room_id, "role": "X", "state": r.game.get_state()})
+    return JSONResponse({"room_id": room_id, "role": "X", "state": r.get_state()})
 
 class JoinRoomBody(BaseModel):
     room_id: str
@@ -57,13 +78,13 @@ def join_room(body: JoinRoomBody):
         role = "O"
     else:
         role = "Spectator"
-    return JSONResponse({"role": role, "state": r.game.get_state()})
+    return JSONResponse({"role": role, "state": r.get_state()})
 
 @app.get("/api/state/{room_id}")
 def get_state(room_id: str):
     if room_id not in rooms:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    return JSONResponse(rooms[room_id].game.get_state())
+    return JSONResponse(rooms[room_id].get_state())
 
 class PlaceBody(BaseModel):
     client_id: str
@@ -86,7 +107,7 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
             
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
-    return JSONResponse({**result, "state": r.game.get_state()})
+    return JSONResponse({**result, "state": r.get_state()})
 
 class ResolveBody(BaseModel):
     client_id: str
@@ -108,7 +129,7 @@ def resolve(room_id: str, body: ResolveBody):
                 return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
                 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
-    return JSONResponse({**result, "state": r.game.get_state()})
+    return JSONResponse({**result, "state": r.get_state()})
 
 class TimeoutBody(BaseModel):
     client_id: str
@@ -123,7 +144,7 @@ def timeout(room_id: str, body: TimeoutBody):
         game.status = GameStatus.FINISHED
         game.winner = "O" if timed_out == "X" else "X"
         game.winning_lines = []
-    return JSONResponse({"state": game.get_state()})
+    return JSONResponse({"state": r.get_state()})
 
 class ResetBody(BaseModel):
     client_id: str
@@ -135,7 +156,7 @@ def reset(room_id: str, body: ResetBody):
     if r.mode == "pvp" and body.client_id not in (r.x, r.o):
         return JSONResponse({"error": "觀戰者無法重新開始"}, status_code=403)
     r.game = QuantumGame()
-    return JSONResponse({"ok": True, "state": r.game.get_state()})
+    return JSONResponse({"ok": True, "state": r.get_state()})
 
 class AIMoveBody(BaseModel):
     client_id: str
@@ -173,7 +194,7 @@ def ai_move(room_id: str, body: AIMoveBody):
             chosen_cell = random.choice([piece.c1, piece.c2])
             game.resolve(pid, chosen_cell)
 
-    return JSONResponse({"ok": True, "state": game.get_state()})
+    return JSONResponse({"ok": True, "state": r.get_state()})
 
 # ── 啟動 ──────────────────────────────────────────────────────────────────────
 

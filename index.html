@@ -656,13 +656,17 @@ const playSound = (type) => {
 let timeLeft = 60;
 let activeTimerPlayer = null;
 
-function startTimer(player) {
+function startTimer(player, serverTimeLeft) {
   if (activeTimerPlayer === player && turnInterval !== null) {
+      if (serverTimeLeft !== undefined && Math.abs(timeLeft - serverTimeLeft) > 1) {
+          timeLeft = serverTimeLeft;
+          updateTimerDisplay();
+      }
       return; 
   }
   clearInterval(turnInterval);
   activeTimerPlayer = player;
-  timeLeft = 60;
+  timeLeft = serverTimeLeft !== undefined ? serverTimeLeft : 60;
   updateTimerDisplay();
   
   turnInterval = setInterval(async () => {
@@ -701,7 +705,7 @@ function manageTurnTimer(s) {
     }
     
     if (activePlayer) {
-        startTimer(activePlayer);
+        startTimer(activePlayer, s.time_left);
     }
     
     document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
@@ -1037,6 +1041,8 @@ async function pollState() {
     if (res.error) return; 
     if (res.move_count > prevMoveCount || res.status !== prevStatus) {
         render(res);
+    } else if (res.time_left !== undefined && activeTimerPlayer) {
+        startTimer(activeTimerPlayer, res.time_left);
     }
 }
 
