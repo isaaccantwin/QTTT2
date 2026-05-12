@@ -405,11 +405,12 @@
   <div id="left-col">
     <details id="rules" open>
       <summary style="cursor:pointer;font-weight:600;color:var(--text);margin-bottom:1vh;font-size:1.8vh;">📖 遊戲規則</summary>
-      <div class="rule-line"><strong>1. 量子落子</strong> — 每回合點兩個不同格子（剩一格時可直下）。</div>
-      <div class="rule-line"><strong>2. 糾纏</strong> — 棋子形成糾纏邊。</div>
-      <div class="rule-line"><strong>3. 循環測量</strong> — 形成環時，由<em>對方</em>決定塌縮。</div>
-      <div class="rule-line"><strong>4. 獲勝</strong> — 三個傳統棋子連線即勝。</div>
-      <div class="rule-line"><span class="tag-x">X</span> 先手，<span class="tag-o">O</span> 後手。</div>
+      <div class="rule-line"><strong>1. 疊加狀態</strong>：每回合必須選擇「兩個不同的大格子」放置小棋子，代表它同時存在於兩格（尚未確定在哪）。</div>
+      <div class="rule-line"><strong>2. 形成糾纏</strong>：當多個不同的棋子被放在同一個大格子裡時，它們就互相「糾纏」了。</div>
+      <div class="rule-line"><strong>3. 循環塌縮（關鍵）</strong>：當糾纏的棋子形成一個「封閉的環」時，就會觸發塌縮！將由「對手（沒有製造出環的人）」來決定棋子的最終位置。</div>
+      <div class="rule-line"><strong>4. 選擇塌縮</strong>：對手必須點擊「發出綠色閃光的小棋子」，將其永久固定。這會引發連鎖反應，讓環上的棋子全部變成確定的大棋子。</div>
+      <div class="rule-line"><strong>5. 獲勝條件</strong>：當確定位置的「大棋子」連成三線即獲勝！若雙方同時連線，最大編號數字較小的一方贏。</div>
+      <div class="rule-line"><span class="tag-x">X（叉）</span> 先手，<span class="tag-o">O（圈）</span> 後手。</div>
     </details>
     <div id="history-box">
       <h3 style="font-size:1.8vh; color:var(--text);">📜 遊戲紀錄</h3>
@@ -484,11 +485,12 @@ const i18n = {
     btn_pvp: "➕ Create Room",
     btn_pve: "🤖 vs AI (O)",
     rules_title: "📖 Rules",
-    rule_1: "<strong>1. Quantum Move</strong> — Pick 2 different cells each turn.",
-    rule_2: "<strong>2. Entanglement</strong> — Pieces form cyclic graphs.",
-    rule_3: "<strong>3. Collapse</strong> — When a cycle forms, the <em>other</em> player chooses how it collapses.",
-    rule_4: "<strong>4. Victory</strong> — Connect 3 classical marks to win.",
-    rule_5: "<span class='tag-x'>X</span> goes first, <span class='tag-o'>O</span> goes second.",
+    rule_1: "<strong>1. Superposition:</strong> Each turn, place your mark in TWO different cells. It exists in both places at once.",
+    rule_2: "<strong>2. Entanglement:</strong> When different marks are in the same cell, they become entangled.",
+    rule_3: "<strong>3. Cyclic Collapse (Crucial):</strong> If a closed loop of entangled marks is formed, it triggers a collapse! The opponent (who didn't create the cycle) gets to decide the outcome.",
+    rule_4: "<strong>4. Choosing Collapse:</strong> The opponent clicks a blinking GREEN piece to lock it permanently. This triggers a chain reaction, settling all pieces in the loop into big classical marks.",
+    rule_5: "<strong>5. Victory:</strong> Connect 3 classical (big) marks in a row to win! If tied, the one with the lower maximum subscript wins.",
+    rule_6: "<span class='tag-x'>X</span> goes first, <span class='tag-o'>O</span> goes second.",
     history_title: "📜 History",
     center_title: "⚛ Quantum Tic-Tac-Toe",
     status_loading: "Loading...",
@@ -523,11 +525,12 @@ const i18n = {
     btn_pvp: "➕ 建立對戰房間",
     btn_pve: "🤖 人機對戰 (O)",
     rules_title: "📖 遊戲規則",
-    rule_1: "<strong>1. 量子落子</strong> — 每回合點兩個不同格子（剩一格時可直下）。",
-    rule_2: "<strong>2. 糾纏</strong> — 棋子形成糾纏邊。",
-    rule_3: "<strong>3. 循環測量</strong> — 形成環時，由<em>對方</em>決定塌縮。",
-    rule_4: "<strong>4. 獲勝</strong> — 三個傳統棋子連線即勝。",
-    rule_5: "<span class='tag-x'>X</span> 先手，<span class='tag-o'>O</span> 後手。",
+    rule_1: "<strong>1. 疊加狀態</strong>：每回合必須選擇「兩個不同的大格子」放置小棋子，代表它同時存在於兩格（尚未確定在哪）。",
+    rule_2: "<strong>2. 形成糾纏</strong>：當多個不同的棋子被放在同一個大格子裡時，它們就互相「糾纏」了。",
+    rule_3: "<strong>3. 循環塌縮（關鍵）</strong>：當糾纏的棋子形成一個「封閉的環」時，就會觸發塌縮！將由「對手（沒有製造出環的人）」來決定棋子的最終位置。",
+    rule_4: "<strong>4. 選擇塌縮</strong>：對手必須點擊「發出綠色閃光的小棋子」，將其永久固定。這會引發連鎖反應，讓環上的棋子全部變成確定的大棋子。",
+    rule_5: "<strong>5. 獲勝條件</strong>：當確定位置的「大棋子」連成三線即獲勝！若雙方同時連線，最大編號數字較小的一方贏。",
+    rule_6: "<span class='tag-x'>X（叉）</span> 先手，<span class='tag-o'>O（圈）</span> 後手。",
     history_title: "📜 遊戲紀錄",
     center_title: "⚛ 量子圈圈叉叉",
     status_loading: "載入中...",
@@ -581,12 +584,13 @@ function updateUITexts() {
   
   document.querySelector('#rules summary').innerHTML = t('rules_title');
   const rulesLines = document.querySelectorAll('#rules .rule-line');
-  if(rulesLines.length >= 5) {
+  if(rulesLines.length >= 6) {
       rulesLines[0].innerHTML = t('rule_1');
       rulesLines[1].innerHTML = t('rule_2');
       rulesLines[2].innerHTML = t('rule_3');
       rulesLines[3].innerHTML = t('rule_4');
       rulesLines[4].innerHTML = t('rule_5');
+      rulesLines[5].innerHTML = t('rule_6');
   }
 
   document.querySelector('#history-box h3').textContent = t('history_title');
