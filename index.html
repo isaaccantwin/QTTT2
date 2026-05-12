@@ -745,8 +745,9 @@ function updateTimerDisplay() {
 }
 
 function manageTurnTimer(s) {
-    if (s.status === 'finished') {
+    if (s.status === 'finished' || !s.players_ready) {
         clearInterval(turnInterval);
+        turnInterval = null;
         activeTimerPlayer = null;
         updateTimerDisplay();
         document.getElementById('panel-o').classList.remove('active', 'active-o');
