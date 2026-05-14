@@ -821,6 +821,7 @@ function initBoard() {
 // ─────────────────────────────────────────────────────────────────────────────
 function render(s_state) {
   state = s_state;
+  if (state.mode) gameMode = state.mode;
 
   if (prevStatus === 'playing' && state.status === 'collapse') {
       playSound('collapse');

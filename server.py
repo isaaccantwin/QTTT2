@@ -40,6 +40,9 @@ class RoomState:
             time_left = 0
             
         st["time_left"] = time_left
+        # PVE 模式直接開局，PVP 模式需要兩人都加入
+        st["players_ready"] = (self.mode == "pve") or (self.x is not None and self.o is not None)
+        st["mode"] = self.mode
         return st
 
 rooms = {}
