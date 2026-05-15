@@ -59,9 +59,14 @@ def create_room(body: CreateRoomBody):
     while room_id in rooms:
         room_id = str(random.randint(1000, 9999))
     r = RoomState(body.mode)
-    r.x = body.client_id
+    if body.mode == "pve":
+        r.o = body.client_id
+        role = "O"
+    else:
+        r.x = body.client_id
+        role = "X"
     rooms[room_id] = r
-    return JSONResponse({"room_id": room_id, "role": "X", "state": r.get_state()})
+    return JSONResponse({"room_id": room_id, "role": role, "state": r.get_state()})
 
 class JoinRoomBody(BaseModel):
     room_id: str
@@ -100,7 +105,7 @@ class PlaceBody(BaseModel):
 def place(room_id: str, body: PlaceBody):
     if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
-    
+
     if r.mode == "pvp":
         cp = r.game.current_player
         expected = r.x if cp == "X" else r.o
@@ -108,7 +113,12 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "等待對手加入..."}, status_code=403)
         if expected != body.client_id:
             return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
-            
+    elif r.mode == "pve":
+        if r.game.current_player != "O":
+            return JSONResponse({"error": "等待 AI 思考中..."}, status_code=403)
+        if r.o != body.client_id:
+            return JSONResponse({"error": "你不是玩家 O"}, status_code=403)
+
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
     return JSONResponse({**result, "state": r.get_state()})
 
@@ -130,7 +140,11 @@ def resolve(room_id: str, body: ResolveBody):
                 return JSONResponse({"error": "等待對手加入..."}, status_code=403)
             if expected != body.client_id:
                 return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
-                
+    elif r.mode == "pve":
+        cp = r.game.pending.get("choosing_player") if r.game.pending else None
+        if cp == "O" and r.o != body.client_id:
+            return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
+
     result = r.game.resolve(body.piece_id, body.chosen_cell)
     return JSONResponse({**result, "state": r.get_state()})
 

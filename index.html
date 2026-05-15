@@ -769,14 +769,12 @@ function manageTurnTimer(s) {
     document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
     document.getElementById('panel-x').classList.toggle('active', activePlayer === 'X');
 
-    if (gameMode === 'pve' && activePlayer === 'O' && s.status !== 'finished') {
+    if (gameMode === 'pve' && s.status !== 'finished' && activePlayer !== playerRole) {
         isAITurn = true;
-        if (playerRole === 'X') {
-            setTimeout(async () => {
-                const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
-                if (res.state) render(res.state);
-            }, 1000);
-        }
+        setTimeout(async () => {
+            const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
+            if (res.state) render(res.state);
+        }, 1000);
     } else {
         isAITurn = false;
     }
@@ -823,6 +821,9 @@ function render(s_state) {
   state = s_state;
   if (state.mode) gameMode = state.mode;
 
+  prevStatus = state.status;
+  prevMoveCount = state.move_count;
+
   if (prevStatus === 'playing' && state.status === 'collapse') {
       playSound('collapse');
   } else if (state.status === 'playing' && state.move_count > prevMoveCount) {
@@ -842,9 +843,6 @@ function render(s_state) {
   const statusMain = document.getElementById('status-main');
   const statusHint = document.getElementById('status-hint');
   const boardEl = document.getElementById('board');
-
-  prevStatus = state.status;
-  prevMoveCount = state.move_count;
 
   if (state.status === 'collapse') {
       boardEl.classList.add('collapse-mode');
