@@ -1031,7 +1031,7 @@ async function onSlotClick(c, s) {
     const mark = state.cells[c].quantum[s];
     if (mark && pd.cycle_pieces && pd.cycle_pieces.includes(mark.id)) {
         const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
-        if (res.error) alert(res.error);
+        if (res.error) document.getElementById('status-hint').textContent = res.error;
         else render(res.state);
     }
     return;
@@ -1053,10 +1053,10 @@ async function onSlotClick(c, s) {
             dummyS = (dummyS + 1) % 9;
         }
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
-        if (!res.ok) {
-            if(res.error) alert(res.error);
+        if (res.error) {
+          document.getElementById('status-hint').textContent = res.error;
         } else {
-            render(res.state);
+          render(res.state);
         }
         return;
     }
@@ -1080,8 +1080,8 @@ async function onSlotClick(c, s) {
     const { c: c1, s: s1 } = firstMove;
     firstMove = null;
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
-    if (!res.ok) {
-      if(res.error) alert(res.error);
+    if (res.error) {
+      document.getElementById('status-hint').textContent = res.error;
     } else {
       render(res.state);
     }
@@ -1131,7 +1131,7 @@ async function resetGame() {
   if (playerRole === 'Spectator') return alert("觀戰者無法重新開始");
   firstMove = null;
   const res = await api('/api/reset/' + roomId, {});
-  if (res.error) alert(res.error);
+  if (res.error) document.getElementById('status-hint').textContent = res.error;
   else render(res.state);
 }
 
