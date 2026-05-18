@@ -557,6 +557,24 @@
   <button onclick="toggleLang()" style="padding:8px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--border); color:var(--text); cursor:pointer; font-family:'Nunito', sans-serif; font-weight:700;">🌐 EN / 中文</button>
 </div>
 
+<!-- Feedback Button -->
+<div id="feedback-toggle" style="position:fixed; bottom:20px; right:20px; z-index:9999;">
+  <button onclick="openFeedback()" style="padding:10px 16px; border-radius:20px; background:var(--cyan); border:none; color:#fff; cursor:pointer; font-family:'Nunito', sans-serif; font-weight:700; box-shadow: 0 4px 12px rgba(74, 124, 89, 0.3); transition: all 0.2s;">💡 意見回饋</button>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); z-index: 10000; align-items: center; justify-content: center;">
+  <div style="background: var(--panel); width: 90%; max-width: 400px; padding: 25px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 15px;">
+    <h2 style="font-size: 1.5rem; margin: 0; color: var(--text);" id="fb-title">💡 意見回饋 Feedback</h2>
+    <p style="font-size: 0.9rem; color: var(--muted); margin: 0;" id="fb-desc">有什麼建議或發現 Bug 嗎？告訴我們吧！</p>
+    <textarea id="feedback-text" rows="5" placeholder="請輸入您的意見..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: inherit; resize: vertical; outline: none;"></textarea>
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button onclick="closeFeedback()" style="padding: 8px 16px; border-radius: 8px; background: transparent; border: 1px solid var(--border); color: var(--text);">取消</button>
+      <button onclick="submitFeedback()" style="padding: 8px 16px; border-radius: 8px; background: var(--cyan); border: none; color: #fff; font-weight: bold;">送出</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
 // 全域狀態與 API
@@ -1425,6 +1443,68 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   roomId = null;
   playerRole = null;
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 意見回饋 Feedback
+// ─────────────────────────────────────────────────────────────────────────────
+function openFeedback() {
+  playSound('click');
+  document.getElementById('feedback-modal').style.display = 'flex';
+  const fbTitle = document.getElementById('fb-title');
+  const fbDesc = document.getElementById('fb-desc');
+  const fbText = document.getElementById('feedback-text');
+  
+  if (currentLang === 'en') {
+    fbTitle.textContent = '💡 Feedback';
+    fbDesc.textContent = 'Any suggestions or found a bug? Let us know!';
+    fbText.placeholder = 'Type your feedback here...';
+    fbText.previousElementSibling.nextElementSibling.nextElementSibling.children[0].textContent = 'Cancel';
+    fbText.previousElementSibling.nextElementSibling.nextElementSibling.children[1].textContent = 'Submit';
+  } else {
+    fbTitle.textContent = '💡 意見回饋';
+    fbDesc.textContent = '有什麼建議或發現 Bug 嗎？告訴我們吧！';
+    fbText.placeholder = '請輸入您的意見...';
+    fbText.previousElementSibling.nextElementSibling.nextElementSibling.children[0].textContent = '取消';
+    fbText.previousElementSibling.nextElementSibling.nextElementSibling.children[1].textContent = '送出';
+  }
+}
+
+function closeFeedback() {
+  playSound('click');
+  document.getElementById('feedback-modal').style.display = 'none';
+  document.getElementById('feedback-text').value = '';
+}
+
+async function submitFeedback() {
+  const text = document.getElementById('feedback-text').value.trim();
+  if (!text) {
+    alert(currentLang === 'en' ? 'Please enter some feedback first.' : '請先輸入意見。');
+    return;
+  }
+  
+  playSound('click');
+  const btn = document.querySelector('#feedback-modal button:last-child');
+  const originalText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+
+  try {
+    await api('/api/feedback', {
+      text: text,
+      room_id: roomId,
+      game_mode: gameMode,
+      client_id: clientId,
+      role: playerRole
+    });
+    alert(currentLang === 'en' ? 'Thank you for your feedback!' : '感謝您的回饋！');
+    closeFeedback();
+  } catch (e) {
+    alert(currentLang === 'en' ? 'Submission failed, please try again.' : '送出失敗，請稍後再試。');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 啟動

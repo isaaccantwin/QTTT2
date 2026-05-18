@@ -6,10 +6,12 @@ server.py — Quantum Tic-Tac-Toe 極簡後端
 
 import time
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 import random
+import json
+import datetime
 
 from game_logic import QuantumGame, GameStatus
 
@@ -38,6 +40,30 @@ def leave_room(room_id: str, body: LeaveBody):
         r.o = None
     if r.x is None and r.o is None:
         del rooms[room_id]
+    return JSONResponse({"ok": True})
+
+class FeedbackBody(BaseModel):
+    text: str
+    room_id: str | None = None
+    game_mode: str | None = None
+    client_id: str | None = None
+    role: str | None = None
+
+@app.post("/api/feedback")
+def submit_feedback(body: FeedbackBody):
+    feedback_data = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "text": body.text,
+        "client_id": body.client_id,
+        "room_id": body.room_id,
+        "game_mode": body.game_mode,
+        "role": body.role
+    }
+    
+    # Save as JSONL (JSON Lines) for easy reading by AI or data pipelines
+    with open("feedback.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(feedback_data, ensure_ascii=False) + "\n")
+        
     return JSONResponse({"ok": True})
 
 
