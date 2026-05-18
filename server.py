@@ -59,6 +59,8 @@ class RoomState:
         self.o_paused = False
         self.x_paused_at = None
         self.o_paused_at = None
+        self.x_increment = 0
+        self.o_increment = 0
 
     def get_state(self):
         import time
@@ -217,6 +219,13 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "你不是玩家 O"}, status_code=403)
 
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
+    r.get_state()
+    if r.game.current_player == "X":
+        r.o_time_left += r.o_increment
+        r.o_time_spent = max(0, 60 - r.o_time_left)
+    elif r.game.current_player == "O":
+        r.x_time_left += r.x_increment
+        r.x_time_spent = max(0, 60 - r.x_time_left)
     return JSONResponse({**result, "state": r.get_state()})
 
 class ResolveBody(BaseModel):
@@ -243,6 +252,13 @@ def resolve(room_id: str, body: ResolveBody):
             return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
+    r.get_state()
+    if r.game.current_player == "X":
+        r.o_time_left += r.o_increment
+        r.o_time_spent = max(0, 60 - r.o_time_left)
+    elif r.game.current_player == "O":
+        r.x_time_left += r.x_increment
+        r.x_time_spent = max(0, 60 - r.x_time_left)
     return JSONResponse({**result, "state": r.get_state()})
 
 class TimeoutBody(BaseModel):
@@ -277,6 +293,8 @@ def reset(room_id: str, body: ResetBody):
     r.x_last_update = None
     r.o_last_update = None
     r.last_current_player = None
+    r.x_increment = 0
+    r.o_increment = 0
     return JSONResponse({"ok": True, "state": r.get_state()})
 
 class AIMoveBody(BaseModel):
@@ -314,6 +332,14 @@ def ai_move(room_id: str, body: AIMoveBody):
             piece = game.pieces[pid]
             chosen_cell = random.choice([piece.c1, piece.c2])
             game.resolve(pid, chosen_cell)
+
+    r.get_state()
+    if game.current_player == "X":
+        r.o_time_left += r.o_increment
+        r.o_time_spent = max(0, 60 - r.o_time_left)
+    elif game.current_player == "O":
+        r.x_time_left += r.x_increment
+        r.x_time_spent = max(0, 60 - r.x_time_left)
 
     return JSONResponse({"ok": True, "state": r.get_state()})
 

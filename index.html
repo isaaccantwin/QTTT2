@@ -771,8 +771,12 @@ function startTimer(player, serverTimeLeft) {
 function updateTimerDisplay() {
   if (state && state.x_time_left !== undefined && state.o_time_left !== undefined) {
     const formatTime = (t) => {
-      const mins = Math.floor(t / 60);
-      const secs = Math.floor(t % 60);
+      const totalSecs = Math.floor(t);
+      const mins = Math.floor(totalSecs / 60);
+      const secs = totalSecs % 60;
+      if (mins >= 10) {
+        return mins + ':' + String(secs).padStart(2, '0');
+      }
       return mins + ':' + String(secs).padStart(2, '0');
     };
     document.getElementById('timer-o').textContent = formatTime(state.o_time_left);
