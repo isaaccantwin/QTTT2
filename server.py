@@ -21,35 +21,13 @@ def root():
 
 @app.get("/api/lobby")
 def lobby():
-    cleanup_rooms()
     return JSONResponse({"lobby": get_lobby_info()})
-
-def cleanup_rooms():
-    import time
-    to_delete = []
-    for rid, r in rooms.items():
-        if r.mode == "pve":
-            continue
-        x_gone = r.x is None or (r.x_last_heartbeat and time.time() - r.x_last_heartbeat > 30)
-        o_gone = r.o is None or (r.o_last_heartbeat and time.time() - r.o_last_heartbeat > 30)
-        if x_gone and o_gone:
-            to_delete.append(rid)
-    for rid in to_delete:
-        del rooms[rid]
 
 class HeartbeatBody(BaseModel):
     client_id: str
 
 @app.post("/api/heartbeat/{room_id}")
 def heartbeat(room_id: str, body: HeartbeatBody):
-    if room_id in rooms:
-        r = rooms[room_id]
-        import time
-        now = time.time()
-        if r.x == body.client_id:
-            r.x_last_heartbeat = now
-        if r.o == body.client_id:
-            r.o_last_heartbeat = now
     return JSONResponse({"ok": True})
 
 class RoomState:
@@ -68,8 +46,6 @@ class RoomState:
         self.o_last_update = None
         self.x_time_left = 60
         self.o_time_left = 60
-        self.x_last_heartbeat = time.time()
-        self.o_last_heartbeat = time.time()
 
     def get_state(self):
         import time
