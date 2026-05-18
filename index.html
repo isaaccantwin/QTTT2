@@ -875,19 +875,29 @@ function manageTurnTimer(s) {
 
     if (gameMode === 'pve' && s.status !== 'finished' && activePlayer !== playerRole) {
         isAITurn = true;
-        // Guard: only fire ai_move when the active player actually changed to AI
-        // Prevents duplicate calls when render() is called multiple times in same turn
-        if (!aiRunning && activePlayer !== lastActivePlayer) {
-            aiRunning = true;
-            api('/api/ai_move/' + roomId, { client_id: clientId }).then(res => {
-                aiRunning = false;
-                isAITurn = false;
-                if (res.state) render(res.state);
-            }).catch(() => { aiRunning = false; isAITurn = false; });
-        }
+        // NOTE: do NOT call ai_move here. AI is triggered by maybeDoAIMove()
+        // called from enterGame / onSlotClick / pollState to avoid race conditions.
     } else {
         isAITurn = false;
+    }
+}
+
+// ── Single source-of-truth for AI move ─────────────────────────────────
+// Called only after a confirmed server-state response, never on optimistic renders.
+async function maybeDoAIMove(s) {
+    if (gameMode !== 'pve' || !s || s.status === 'finished' || aiRunning) return;
+    const ap = s.status === 'collapse'
+        ? (s.pending && s.pending.choosing_player)
+        : s.current_player;
+    if (ap === playerRole) return; // human's turn
+    aiRunning = true;
+    isAITurn = true;
+    try {
+        const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
+        if (res.state) render(res.state);
+    } finally {
         aiRunning = false;
+        isAITurn = false;
     }
 }
 
@@ -1105,7 +1115,7 @@ async function onSlotClick(c, s) {
     const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
     document.getElementById('board').style.opacity = '';
     pendingRequest = false;
-    if (res.state) render(res.state);
+    if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
     return;
   }
 
@@ -1132,7 +1142,7 @@ async function onSlotClick(c, s) {
         pendingRequest = true;
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
         pendingRequest = false;
-        if (res.state) render(res.state);
+        if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
         return;
     }
 
@@ -1157,7 +1167,7 @@ async function onSlotClick(c, s) {
     pendingRequest = true;
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
     pendingRequest = false;
-    if (res.state) render(res.state);
+    if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
   }
 }
 
@@ -1256,6 +1266,8 @@ function enterGame(initialState) {
     const pollMs = playerRole === 'Spectator' ? 1500 : 2000;
     pollInterval = setInterval(pollState, pollMs);
     startLocalTimer();
+    // Trigger AI if it moves first (X goes first, player is O in pve)
+    await maybeDoAIMove(initialState);
 }
 
 async function pollState() {
@@ -1274,6 +1286,8 @@ async function pollState() {
     if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady) {
         prevPlayersReady = res.players_ready;
         render(res);
+        // Only trigger AI from poll if move count advanced (not just a status flip we already handled)
+        if (res.move_count > prevMoveCount) await maybeDoAIMove(res);
     }
 }
 
