@@ -446,12 +446,25 @@
   <h1>⚛ 量子圈圈叉叉</h1>
   <p>請選擇遊戲模式</p>
   <div class="menu-buttons" style="flex-direction: column; gap: 15px; align-items: center;">
+    <button id="btn-lobby" onclick="showLobby()" style="width: 100%;">🏠 玩家大廳</button>
     <button id="btn-pvp" onclick="createRoom('pvp')" style="width: 100%;">➕ 建立對戰房間</button>
     <button id="btn-pve" onclick="createRoom('pve')" style="width: 100%;">🤖 人機對戰 (O)</button>
     <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%;">
         <input type="text" id="join-room-id" placeholder="房間號碼" style="padding: 18px 20px; font-size: 1.3rem; border-radius:12px; border:1px solid var(--border); flex: 1; outline: none;">
         <button onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
     </div>
+  </div>
+</div>
+
+<div id="lobby-menu" style="display: none; position: fixed; inset: 0; background: rgba(245, 247, 244, 0.95); backdrop-filter: blur(8px); z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 30px;">
+  <h1 id="lobby-title" style="font-size: 3rem;">🏠 玩家大廳</h1>
+  <p id="lobby-subtitle" style="font-size: 1.3rem; color: var(--muted);">等待對戰的玩家</p>
+  <div id="lobby-list" style="display: flex; flex-direction: column; gap: 12px; width: 90%; max-width: 500px; max-height: 50vh; overflow-y: auto; padding: 20px; background: var(--panel); border-radius: 16px; border: 1px solid var(--border);">
+    <div style="text-align: center; color: var(--muted); padding: 20px;">載入中...</div>
+  </div>
+  <div style="display: flex; gap: 15px;">
+    <button id="btn-refresh" onclick="refreshLobby()" style="padding: 15px 30px; font-size: 1.2rem;">🔄 重新整理</button>
+    <button id="btn-back-lobby" onclick="closeLobby()" style="padding: 15px 30px; font-size: 1.2rem;">🔙 回選單</button>
   </div>
 </div>
 
@@ -523,6 +536,7 @@ let pollInterval = null;
 let isAITurn = false;
 let prevStatus = null;
 let prevMoveCount = 0;
+let prevPlayersReady = null;
 let currentLang = 'zh';
 
 let clientId = localStorage.getItem('qttt_client_id');
@@ -537,8 +551,21 @@ const i18n = {
   en: {
     menu_title: "⚛ Quantum Tic-Tac-Toe",
     menu_subtitle: "Select Game Mode",
+    btn_lobby: "🏠 Player Lobby",
     btn_pvp: "➕ Create Room",
     btn_pve: "🤖 vs AI (O)",
+    lobby_title: "🏠 Player Lobby",
+    lobby_subtitle: "Players waiting for match",
+    lobby_loading: "Loading...",
+    lobby_empty: "No rooms available. Create one!",
+    lobby_error: "Failed to load. Try again later.",
+    lobby_room: "Room",
+    lobby_pvp: "PvP Battle",
+    lobby_pve: "PvE vs AI",
+    lobby_waiting: "Waiting...",
+    lobby_join: "Join ▶",
+    btn_refresh: "🔄 Refresh",
+    btn_back: "🔙 Back",
     rules_title: "📖 Rules",
     rule_1: "<strong>1. Superposition:</strong> Each turn, place your mark in TWO different cells. It exists in both places at once.",
     rule_2: "<strong>2. Entanglement:</strong> When different marks are in the same cell, they become entangled.",
@@ -578,8 +605,21 @@ const i18n = {
   zh: {
     menu_title: "⚛ 量子圈圈叉叉",
     menu_subtitle: "請選擇遊戲模式",
+    btn_lobby: "🏠 玩家大廳",
     btn_pvp: "➕ 建立對戰房間",
     btn_pve: "🤖 人機對戰 (O)",
+    lobby_title: "🏠 玩家大廳",
+    lobby_subtitle: "等待對戰的玩家",
+    lobby_loading: "載入中...",
+    lobby_empty: "目前沒有等待中的房間，你可以建立一個！",
+    lobby_error: "載入失敗，請稍後重試",
+    lobby_room: "房間",
+    lobby_pvp: "PvP 對戰",
+    lobby_pve: "PvE 人機",
+    lobby_waiting: "等待中...",
+    lobby_join: "加入 ▶",
+    btn_refresh: "🔄 重新整理",
+    btn_back: "🔙 回選單",
     rules_title: "📖 遊戲規則",
     rule_1: "<strong>1. 疊加狀態</strong>：每回合必須選擇「兩個不同的大格子」放置小棋子，代表它同時存在於兩格（尚未確定在哪）。",
     rule_2: "<strong>2. 形成糾纏</strong>：當多個不同的棋子被放在同一個大格子裡時，它們就互相「糾纏」了。",
@@ -636,6 +676,7 @@ function toggleLang() {
 function updateUITexts() {
   document.querySelector('#main-menu h1').innerHTML = t('menu_title');
   document.querySelector('#main-menu p').textContent = t('menu_subtitle');
+  document.querySelector('#btn-lobby').textContent = t('btn_lobby');
   document.querySelector('#btn-pvp').textContent = t('btn_pvp');
   document.querySelector('#btn-pve').textContent = t('btn_pve');
   
@@ -712,6 +753,7 @@ const playSound = (type) => {
 
 let timeLeft = 60;
 let activeTimerPlayer = null;
+let lastServerTime = null;
 
 function startTimer(player, serverTimeLeft) {
   if (activeTimerPlayer === player && turnInterval !== null) {
@@ -740,8 +782,15 @@ function startTimer(player, serverTimeLeft) {
 }
 
 function updateTimerDisplay() {
-  document.getElementById('timer-o').textContent = (activeTimerPlayer === 'O') ? timeLeft + 's' : '--';
-  document.getElementById('timer-x').textContent = (activeTimerPlayer === 'X') ? timeLeft + 's' : '--';
+  if (state && state.x_time_left !== undefined && state.o_time_left !== undefined) {
+    const formatTime = (t) => {
+      const mins = Math.floor(t / 60);
+      const secs = Math.floor(t % 60);
+      return mins + ':' + String(secs).padStart(2, '0');
+    };
+    document.getElementById('timer-o').textContent = formatTime(state.o_time_left);
+    document.getElementById('timer-x').textContent = formatTime(state.x_time_left);
+  }
 }
 
 function manageTurnTimer(s) {
@@ -755,15 +804,13 @@ function manageTurnTimer(s) {
         return;
     }
     
+    updateTimerDisplay();
+    
     let activePlayer = null;
     if (s.status === 'playing') {
         activePlayer = s.current_player;
     } else if (s.status === 'collapse') {
         activePlayer = s.pending.choosing_player;
-    }
-    
-    if (activePlayer) {
-        startTimer(activePlayer, s.time_left);
     }
     
     document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
@@ -1092,20 +1139,125 @@ function enterGame(initialState) {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('layout').style.display = 'flex';
     document.getElementById('room-info').textContent = `Room: ${roomId} | Role: ${playerRole}`;
+    prevPlayersReady = initialState.players_ready;
     render(initialState);
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = setInterval(pollState, 1000);
+    startLocalTimer();
 }
 
 async function pollState() {
     if (!roomId) return;
+    await api(`/api/heartbeat/${roomId}`, {});
     const res = await api(`/api/state/${roomId}`);
     if (res.error) return; 
-    if (res.move_count > prevMoveCount || res.status !== prevStatus) {
-        render(res);
-    } else if (res.time_left !== undefined && activeTimerPlayer) {
-        startTimer(activeTimerPlayer, res.time_left);
+    if (res.x_time_left !== undefined && res.o_time_left !== undefined) {
+        state.x_time_left = res.x_time_left;
+        state.o_time_left = res.o_time_left;
+        let activePlayer = res.current_player;
+        if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
+            activePlayer = res.pending.choosing_player;
+        }
+        state.active_player = activePlayer;
+        lastServerTime = { x: res.x_time_left, o: res.o_time_left };
+        updateTimerDisplay();
     }
+    if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady) {
+        prevPlayersReady = res.players_ready;
+        render(res);
+    }
+}
+
+function startLocalTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        if (lastServerTime && state && state.players_ready && state.status !== 'finished') {
+            let activePlayer = state.current_player;
+            if (state.status === 'collapse' && state.pending && state.pending.choosing_player) {
+                activePlayer = state.pending.choosing_player;
+            }
+            if (activePlayer === 'X') {
+                state.x_time_left = Math.max(0, lastServerTime.x - 1);
+                lastServerTime.x = state.x_time_left;
+            } else if (activePlayer === 'O') {
+                state.o_time_left = Math.max(0, lastServerTime.o - 1);
+                lastServerTime.o = state.o_time_left;
+            }
+            updateTimerDisplay();
+        }
+    }, 1000);
+}
+
+function stopLocalTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+}
+
+async function showLobby() {
+  playSound('click');
+  document.getElementById('main-menu').style.display = 'none';
+  document.getElementById('lobby-menu').style.display = 'flex';
+  document.getElementById('lobby-title').innerHTML = t('lobby_title');
+  document.getElementById('lobby-subtitle').textContent = t('lobby_subtitle');
+  document.getElementById('btn-refresh').textContent = t('btn_refresh');
+  document.getElementById('btn-back-lobby').textContent = t('btn_back');
+  refreshLobby();
+}
+
+function closeLobby() {
+  playSound('click');
+  document.getElementById('lobby-menu').style.display = 'none';
+  document.getElementById('main-menu').style.display = 'flex';
+}
+
+async function refreshLobby() {
+  const listEl = document.getElementById('lobby-list');
+  listEl.innerHTML = `<div style="text-align: center; color: var(--muted); padding: 20px;">${t('lobby_loading')}</div>`;
+  
+  try {
+    const res = await api('/api/lobby');
+    const rooms = res.lobby || [];
+    
+    if (rooms.length === 0) {
+      listEl.innerHTML = `<div style="text-align: center; color: var(--muted); padding: 30px;">${t('lobby_empty')}</div>`;
+      return;
+    }
+    
+    listEl.innerHTML = '';
+    rooms.forEach(room => {
+      const div = document.createElement('div');
+      div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: var(--bg); border-radius: 10px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;';
+      div.onmouseover = () => { div.style.borderColor = 'var(--cyan)'; div.style.transform = 'translateY(-2px)'; };
+      div.onmouseout = () => { div.style.borderColor = 'var(--border)'; div.style.transform = 'translateY(0)'; };
+      div.onclick = () => { joinRoomById(room.room_id); };
+      
+      const modeLabel = room.mode === 'pvp' ? t('lobby_pvp') : t('lobby_pve');
+      const playerInfo = room.players.X ? `X: ${room.players.X}` : t('lobby_waiting');
+      
+      div.innerHTML = `
+        <div>
+          <div style="font-weight: 700; color: var(--text);">${t('lobby_room')} ${room.room_id}</div>
+          <div style="font-size: 0.9rem; color: var(--muted);">${modeLabel} · ${playerInfo}</div>
+        </div>
+        <div style="color: var(--cyan); font-weight: 700;">${t('lobby_join')}</div>
+      `;
+      listEl.appendChild(div);
+    });
+  } catch (e) {
+    listEl.innerHTML = `<div style="text-align: center; color: var(--orange); padding: 20px;">${t('lobby_error')}</div>`;
+  }
+}
+
+async function joinRoomById(rid) {
+  playSound('click');
+  clientId = Math.random().toString(36).substring(2);
+  localStorage.setItem('qttt_client_id', clientId);
+  const res = await api('/api/join_room', { room_id: rid });
+  if (res.error) return alert(res.error);
+  roomId = rid;
+  playerRole = res.role;
+  closeLobby();
+  enterGame(res.state);
 }
 
 async function createRoom(mode) {
@@ -1121,6 +1273,8 @@ async function joinRoom() {
   playSound('click');
   const rid = document.getElementById('join-room-id').value.trim();
   if (!rid) return alert("請輸入房間號碼 / Enter Room ID");
+  clientId = Math.random().toString(36).substring(2);
+  localStorage.setItem('qttt_client_id', clientId);
   const res = await api('/api/join_room', { room_id: rid });
   if (res.error) return alert(res.error);
   roomId = rid;
@@ -1134,6 +1288,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   document.getElementById('layout').style.display = 'none';
   clearInterval(turnInterval);
   if (pollInterval) clearInterval(pollInterval);
+  stopLocalTimer();
   roomId = null;
   playerRole = null;
 });

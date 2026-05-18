@@ -14,6 +14,35 @@ from game_logic import QuantumGame, GameStatus
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
 
+@app.get("/")
+def root():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+@app.get("/api/lobby")
+def lobby():
+    cleanup_rooms()
+    return JSONResponse({"lobby": get_lobby_info()})
+
+def cleanup_rooms():
+    to_delete = []
+    for rid, r in rooms.items():
+        if r.mode == "pve":
+            continue
+        x_connected = r.x is not None
+        o_connected = r.o is not None
+        if not x_connected and not o_connected:
+            to_delete.append(rid)
+    for rid in to_delete:
+        del rooms[rid]
+
+class HeartbeatBody(BaseModel):
+    client_id: str
+
+@app.post("/api/heartbeat/{room_id}")
+def heartbeat(room_id: str, body: HeartbeatBody):
+    return JSONResponse({"ok": True})
+
 class RoomState:
     def __init__(self, mode):
         import time
@@ -23,29 +52,87 @@ class RoomState:
         self.o = None
         self.last_move_count = 0
         self.last_status = "playing"
-        self.turn_start_time = time.time()
+        self.last_current_player = None
+        self.x_time_spent = 0
+        self.o_time_spent = 0
+        self.x_last_update = None
+        self.o_last_update = None
+        self.x_time_left = 60
+        self.o_time_left = 60
 
     def get_state(self):
         import time
         st = self.game.get_state()
-        # Check if turn changed to reset timer
-        if st["move_count"] != self.last_move_count or st["status"] != self.last_status:
-            self.last_move_count = st["move_count"]
-            self.last_status = st["status"]
-            self.turn_start_time = time.time()
+        players_ready = (self.mode == "pve") or (self.x is not None and self.o is not None)
         
-        elapsed = time.time() - self.turn_start_time
-        time_left = max(0, int(60 - elapsed))
+        now = time.time()
+        
         if st["status"] == "finished":
             time_left = 0
+            self.x_time_left = 0
+            self.o_time_left = 0
+        elif not players_ready:
+            time_left = 60
+            self.x_time_left = 60
+            self.o_time_left = 60
+            self.last_current_player = None
+            self.x_time_spent = 0
+            self.o_time_spent = 0
+            self.x_last_update = None
+            self.o_last_update = None
+        else:
+            if st["status"] == "collapse":
+                active_player = st.get("pending", {}).get("choosing_player")
+            else:
+                active_player = st.get("current_player")
             
+            if active_player != self.last_current_player and self.last_current_player is not None:
+                if self.last_current_player == "X" and self.x_last_update is not None:
+                    self.x_time_spent += now - self.x_last_update
+                elif self.last_current_player == "O" and self.o_last_update is not None:
+                    self.o_time_spent += now - self.o_last_update
+            
+            if active_player == "X":
+                if self.x_last_update is not None:
+                    self.x_time_spent += now - self.x_last_update
+                self.x_last_update = now
+                self.x_time_left = max(0, 60 - self.x_time_spent)
+                time_left = self.x_time_left
+            elif active_player == "O":
+                if self.o_last_update is not None:
+                    self.o_time_spent += now - self.o_last_update
+                self.o_last_update = now
+                self.o_time_left = max(0, 60 - self.o_time_spent)
+                time_left = self.o_time_left
+            else:
+                time_left = 0
+            
+            if active_player != self.last_current_player:
+                self.last_current_player = active_player
+        
         st["time_left"] = time_left
-        # PVE 模式直接開局，PVP 模式需要兩人都加入
-        st["players_ready"] = (self.mode == "pve") or (self.x is not None and self.o is not None)
+        st["x_time_left"] = self.x_time_left
+        st["o_time_left"] = self.o_time_left
+        st["players_ready"] = players_ready
         st["mode"] = self.mode
         return st
 
 rooms = {}
+
+def get_lobby_info():
+    lobby = []
+    for room_id, r in rooms.items():
+        state = r.get_state()
+        if not state["players_ready"]:
+            lobby.append({
+                "room_id": room_id,
+                "mode": r.mode,
+                "players": {
+                    "X": r.x[:8] + "..." if r.x else None,
+                    "O": r.o[:8] + "..." if r.o else None
+                }
+            })
+    return lobby
 
 # ── HTTP ──────────────────────────────────────────────────────────────────────
 
@@ -92,6 +179,7 @@ def join_room(body: JoinRoomBody):
 def get_state(room_id: str):
     if room_id not in rooms:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    cleanup_rooms()
     return JSONResponse(rooms[room_id].get_state())
 
 class PlaceBody(BaseModel):
@@ -156,9 +244,9 @@ def timeout(room_id: str, body: TimeoutBody):
     if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
     game = r.game
-    if game.status != GameStatus.FINISHED:
-        timed_out = game.pending["choosing_player"] if game.status == GameStatus.COLLAPSE else game.current_player
+    if game.status != GameStatus.FINISHED and r.game_time_left <= 0:
         game.status = GameStatus.FINISHED
+        timed_out = game.pending["choosing_player"] if game.status == GameStatus.COLLAPSE else game.current_player
         game.winner = "O" if timed_out == "X" else "X"
         game.winning_lines = []
     return JSONResponse({"state": r.get_state()})
@@ -173,6 +261,13 @@ def reset(room_id: str, body: ResetBody):
     if r.mode == "pvp" and body.client_id not in (r.x, r.o):
         return JSONResponse({"error": "觀戰者無法重新開始"}, status_code=403)
     r.game = QuantumGame()
+    r.x_time_left = 60
+    r.o_time_left = 60
+    r.x_time_spent = 0
+    r.o_time_spent = 0
+    r.x_last_update = None
+    r.o_last_update = None
+    r.last_current_player = None
     return JSONResponse({"ok": True, "state": r.get_state()})
 
 class AIMoveBody(BaseModel):
