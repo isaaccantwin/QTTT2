@@ -293,15 +293,6 @@
     transform: translateY(1px);
     box-shadow: 0 1px 4px rgba(44, 62, 50, 0.05);
   }
-  #btn-reset {
-    color: var(--orange);
-    border-color: rgba(217, 124, 72, 0.3);
-  }
-  #btn-reset:hover {
-    background: rgba(217, 124, 72, 0.1);
-    border-color: var(--orange);
-  }
-
   /* ── Rules summary ── */
   #rules {
     background: var(--panel);
@@ -500,7 +491,6 @@
 
     <div id="controls">
       <button id="btn-menu">🔙 回主選單</button>
-      <button id="btn-reset">🔄 重新開始</button>
     </div>
   </div>
 
@@ -578,7 +568,6 @@ const i18n = {
     status_loading: "Loading...",
     waiting_opponent: "⏳ Waiting for opponent to join...",
     btn_menu: "🔙 Main Menu",
-    btn_reset: "🔄 Restart",
     o_title: "O",
     x_title: "X",
     victory_text: "🏆 Victory!",
@@ -632,7 +621,6 @@ const i18n = {
     status_loading: "載入中...",
     waiting_opponent: "⏳ 等待對手加入...",
     btn_menu: "🔙 回主選單",
-    btn_reset: "🔄 重新開始",
     o_title: "O（圈）",
     x_title: "X（叉）",
     victory_text: "🏆 勝利！",
@@ -694,7 +682,6 @@ function updateUITexts() {
   document.querySelector('#history-box h3').textContent = t('history_title');
   document.querySelector('#center-col h1').innerHTML = t('center_title');
   document.querySelector('#btn-menu').textContent = t('btn_menu');
-  document.querySelector('#btn-reset').textContent = t('btn_reset');
   document.querySelector('#panel-o h2').textContent = t('o_title');
   document.querySelector('#panel-x h2').textContent = t('x_title');
   document.querySelectorAll('.victory-message').forEach(el => {
@@ -801,17 +788,26 @@ function manageTurnTimer(s) {
         updateTimerDisplay();
         document.getElementById('panel-o').classList.remove('active', 'active-o');
         document.getElementById('panel-x').classList.remove('active');
+        lastActivePlayer = null;
         return;
     }
-    
+
     updateTimerDisplay();
-    
+
     let activePlayer = null;
     if (s.status === 'playing') {
         activePlayer = s.current_player;
     } else if (s.status === 'collapse') {
         activePlayer = s.pending.choosing_player;
     }
+
+    if (activePlayer !== lastActivePlayer && lastActivePlayer !== null) {
+        lastServerTime = {
+            x: state.x_time_left,
+            o: state.o_time_left
+        };
+    }
+    lastActivePlayer = activePlayer;
     
     document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
     document.getElementById('panel-x').classList.toggle('active', activePlayer === 'X');
@@ -1165,17 +1161,21 @@ function startLocalTimer() {
             if (state.status === 'collapse' && state.pending && state.pending.choosing_player) {
                 activePlayer = state.pending.choosing_player;
             }
-            if (activePlayer === 'X') {
-                state.x_time_left = Math.max(0, lastServerTime.x - 1);
-                lastServerTime.x = state.x_time_left;
-            } else if (activePlayer === 'O') {
-                state.o_time_left = Math.max(0, lastServerTime.o - 1);
-                lastServerTime.o = state.o_time_left;
+            if (activePlayer === lastActivePlayer) {
+                if (activePlayer === 'X') {
+                    state.x_time_left = Math.max(0, lastServerTime.x - 1);
+                    lastServerTime.x = state.x_time_left;
+                } else if (activePlayer === 'O') {
+                    state.o_time_left = Math.max(0, lastServerTime.o - 1);
+                    lastServerTime.o = state.o_time_left;
+                }
             }
             updateTimerDisplay();
         }
     }, 1000);
 }
+
+let lastActivePlayer = null;
 
 function stopLocalTimer() {
     if (timerInterval) clearInterval(timerInterval);
@@ -1282,11 +1282,6 @@ document.getElementById('btn-menu').addEventListener('click', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 啟動
 // ─────────────────────────────────────────────────────────────────────────────
-document.getElementById('btn-reset').addEventListener('click', () => {
-  playSound('click');
-  resetGame();
-});
-
 initBoard();
 
 window.addEventListener('beforeunload', () => {
