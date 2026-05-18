@@ -4,6 +4,7 @@ server.py — Quantum Tic-Tac-Toe 極簡後端
 本地/線上聯機對戰，開房加房觀戰功能。
 """
 
+import time
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -39,97 +40,87 @@ def leave_room(room_id: str, body: LeaveBody):
         del rooms[room_id]
     return JSONResponse({"ok": True})
 
+
 class RoomState:
     def __init__(self, mode):
-        import time
         self.game = QuantumGame()
         self.mode = mode
         self.x = None
         self.o = None
-        self.last_move_count = 0
-        self.last_status = "playing"
-        self.last_current_player = None
-        self.x_time_spent = 0
-        self.o_time_spent = 0
-        self.x_last_update = None
-        self.o_last_update = None
-        self.x_time_left = 60
-        self.o_time_left = 60
-        self.x_paused = False
-        self.o_paused = False
-        self.x_paused_at = None
-        self.o_paused_at = None
-        self.x_increment = 0
-        self.o_increment = 0
+        # Clean timer: each player has a pool of remaining seconds
+        self.x_time_remaining = 60.0
+        self.o_time_remaining = 60.0
+        # When the current turn started (time.time()), None if not started
+        self.turn_start_time: float | None = None
+        # Which player's clock is running
+        self.last_active_player: str | None = None
 
-    def get_state(self):
-        import time
+    def _active_player(self, st: dict) -> str | None:
+        """Who should have their clock running right now."""
+        if st["status"] == "collapse":
+            return (st.get("pending") or {}).get("choosing_player")
+        if st["status"] == "playing":
+            return st.get("current_player")
+        return None
+
+    def _charge_current_player(self, now: float):
+        """Deduct elapsed time from whichever player's clock was running."""
+        if self.turn_start_time is None or self.last_active_player is None:
+            return
+        elapsed = now - self.turn_start_time
+        if self.last_active_player == "X":
+            self.x_time_remaining = max(0.0, self.x_time_remaining - elapsed)
+        else:
+            self.o_time_remaining = max(0.0, self.o_time_remaining - elapsed)
+        self.turn_start_time = now  # reset so we don't double-charge
+
+    def get_state(self) -> dict:
         st = self.game.get_state()
-        players_ready = (self.mode == "pve") or (self.x is not None and self.o is not None)
-
+        players_ready = (self.mode == "pve") or (
+            self.x is not None and self.o is not None
+        )
         now = time.time()
 
-        if st["status"] == "finished":
-            self.x_time_left = 0
-            self.o_time_left = 0
-            self.x_paused = True
-            self.o_paused = True
-        elif not players_ready:
-            self.x_time_left = 60
-            self.o_time_left = 60
-            self.x_time_spent = 0
-            self.o_time_spent = 0
-            self.x_last_update = None
-            self.o_last_update = None
-            self.last_current_player = None
-            self.x_paused = False
-            self.o_paused = False
+        active_player = self._active_player(st)
+
+        if not players_ready or st["status"] == "finished":
+            # Pause everything
+            if st["status"] == "finished":
+                self._charge_current_player(now)
+                self.turn_start_time = None
+            else:
+                # Waiting for second player — reset clocks
+                self.x_time_remaining = 60.0
+                self.o_time_remaining = 60.0
+                self.turn_start_time = None
+                self.last_active_player = None
         else:
-            if st["status"] == "collapse":
-                active_player = st.get("pending", {}).get("choosing_player")
-            else:
-                active_player = st.get("current_player")
+            if active_player != self.last_active_player:
+                # Turn changed: charge the previous player
+                self._charge_current_player(now)
+                self.last_active_player = active_player
+                self.turn_start_time = now
 
-            if active_player != self.last_current_player and self.last_current_player is not None:
-                if self.last_current_player == "X" and self.x_last_update is not None and not self.x_paused:
-                    self.x_time_spent += now - self.x_last_update
-                    self.x_paused = True
-                    self.x_paused_at = now
-                elif self.last_current_player == "O" and self.o_last_update is not None and not self.o_paused:
-                    self.o_time_spent += now - self.o_last_update
-                    self.o_paused = True
-                    self.o_paused_at = now
+        # Compute display values (do NOT mutate remaining here)
+        elapsed_now = (now - self.turn_start_time) if self.turn_start_time is not None else 0.0
+        if active_player == "X" and players_ready and st["status"] != "finished":
+            x_display = max(0.0, self.x_time_remaining - elapsed_now)
+            o_display = self.o_time_remaining
+        elif active_player == "O" and players_ready and st["status"] != "finished":
+            x_display = self.x_time_remaining
+            o_display = max(0.0, self.o_time_remaining - elapsed_now)
+        else:
+            x_display = self.x_time_remaining
+            o_display = self.o_time_remaining
 
-            if active_player == "X":
-                if self.x_paused and self.x_paused_at is not None:
-                    self.x_time_spent += now - self.x_paused_at
-                    self.x_paused = False
-                    self.x_paused_at = None
-                self.x_last_update = now
-                self.x_time_left = max(0, 60 - self.x_time_spent)
-                time_left = self.x_time_left
-            elif active_player == "O":
-                if self.o_paused and self.o_paused_at is not None:
-                    self.o_time_spent += now - self.o_paused_at
-                    self.o_paused = False
-                    self.o_paused_at = None
-                self.o_last_update = now
-                self.o_time_left = max(0, 60 - self.o_time_spent)
-                time_left = self.o_time_left
-            else:
-                time_left = 0
-
-            if active_player != self.last_current_player:
-                self.last_current_player = active_player
-
-        st["time_left"] = time_left if 'time_left' in dir() else 0
-        st["x_time_left"] = self.x_time_left
-        st["o_time_left"] = self.o_time_left
+        st["x_time_left"] = round(x_display, 3)
+        st["o_time_left"] = round(o_display, 3)
         st["players_ready"] = players_ready
         st["mode"] = self.mode
         return st
 
-rooms = {}
+
+rooms: dict[str, RoomState] = {}
 
 def get_lobby_info():
     lobby = []
@@ -202,7 +193,8 @@ class PlaceBody(BaseModel):
 
 @app.post("/api/place/{room_id}")
 def place(room_id: str, body: PlaceBody):
-    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
 
     if r.mode == "pvp":
@@ -219,13 +211,6 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "你不是玩家 O"}, status_code=403)
 
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
-    r.get_state()
-    if r.game.current_player == "X":
-        r.o_time_left += r.o_increment
-        r.o_time_spent = max(0, 60 - r.o_time_left)
-    elif r.game.current_player == "O":
-        r.x_time_left += r.x_increment
-        r.x_time_spent = max(0, 60 - r.x_time_left)
     return JSONResponse({**result, "state": r.get_state()})
 
 class ResolveBody(BaseModel):
@@ -235,9 +220,10 @@ class ResolveBody(BaseModel):
 
 @app.post("/api/resolve/{room_id}")
 def resolve(room_id: str, body: ResolveBody):
-    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
-    
+
     if r.mode == "pvp":
         cp = r.game.pending.get("choosing_player") if r.game.pending else None
         if cp:
@@ -252,13 +238,6 @@ def resolve(room_id: str, body: ResolveBody):
             return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
-    r.get_state()
-    if r.game.current_player == "X":
-        r.o_time_left += r.o_increment
-        r.o_time_spent = max(0, 60 - r.o_time_left)
-    elif r.game.current_player == "O":
-        r.x_time_left += r.x_increment
-        r.x_time_spent = max(0, 60 - r.x_time_left)
     return JSONResponse({**result, "state": r.get_state()})
 
 class TimeoutBody(BaseModel):
@@ -266,14 +245,25 @@ class TimeoutBody(BaseModel):
 
 @app.post("/api/timeout/{room_id}")
 def timeout(room_id: str, body: TimeoutBody):
-    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
     game = r.game
-    if game.status != GameStatus.FINISHED and r.game_time_left <= 0:
+    st = r.get_state()  # updates timer state first
+
+    # Determine which player is timed out
+    if game.status == GameStatus.FINISHED:
+        return JSONResponse({"state": st})
+
+    active_player = r.last_active_player
+    timed_out_time = r.x_time_remaining if active_player == "X" else r.o_time_remaining
+
+    if timed_out_time <= 0:
         game.status = GameStatus.FINISHED
-        timed_out = game.pending["choosing_player"] if game.status == GameStatus.COLLAPSE else game.current_player
-        game.winner = "O" if timed_out == "X" else "X"
+        game.winner = "O" if active_player == "X" else "X"
         game.winning_lines = []
+        r.turn_start_time = None
+
     return JSONResponse({"state": r.get_state()})
 
 class ResetBody(BaseModel):
@@ -281,20 +271,16 @@ class ResetBody(BaseModel):
 
 @app.post("/api/reset/{room_id}")
 def reset(room_id: str, body: ResetBody):
-    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
     if r.mode == "pvp" and body.client_id not in (r.x, r.o):
         return JSONResponse({"error": "觀戰者無法重新開始"}, status_code=403)
     r.game = QuantumGame()
-    r.x_time_left = 60
-    r.o_time_left = 60
-    r.x_time_spent = 0
-    r.o_time_spent = 0
-    r.x_last_update = None
-    r.o_last_update = None
-    r.last_current_player = None
-    r.x_increment = 0
-    r.o_increment = 0
+    r.x_time_remaining = 60.0
+    r.o_time_remaining = 60.0
+    r.turn_start_time = None
+    r.last_active_player = None
     return JSONResponse({"ok": True, "state": r.get_state()})
 
 class AIMoveBody(BaseModel):
@@ -302,7 +288,8 @@ class AIMoveBody(BaseModel):
 
 @app.post("/api/ai_move/{room_id}")
 def ai_move(room_id: str, body: AIMoveBody):
-    if room_id not in rooms: return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
     r = rooms[room_id]
     game = r.game
     if game.status == GameStatus.PLAYING:
@@ -313,7 +300,7 @@ def ai_move(room_id: str, body: AIMoveBody):
                 for s in range(9):
                     if s not in occupied:
                         valid_spots.append((i, s))
-        
+
         if len(valid_spots) >= 2:
             c1s1 = random.choice(valid_spots)
             valid_c2 = [x for x in valid_spots if x[0] != c1s1[0]]
@@ -332,14 +319,6 @@ def ai_move(room_id: str, body: AIMoveBody):
             piece = game.pieces[pid]
             chosen_cell = random.choice([piece.c1, piece.c2])
             game.resolve(pid, chosen_cell)
-
-    r.get_state()
-    if game.current_player == "X":
-        r.o_time_left += r.o_increment
-        r.o_time_spent = max(0, 60 - r.o_time_left)
-    elif game.current_player == "O":
-        r.x_time_left += r.x_increment
-        r.x_time_spent = max(0, 60 - r.x_time_left)
 
     return JSONResponse({"ok": True, "state": r.get_state()})
 

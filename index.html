@@ -523,11 +523,20 @@ let gameMode = 'pvp';
 let firstMove = null;
 let turnInterval = null;
 let pollInterval = null;
+let timerInterval = null;   // local countdown ticker
 let isAITurn = false;
+let pendingRequest = false; // optimistic-UI lock
 let prevStatus = null;
 let prevMoveCount = 0;
 let prevPlayersReady = null;
 let currentLang = 'zh';
+
+// ── Timer state (timestamp-based, no drift) ────────────────────────────────
+let timerActivePlayer = null;  // 'X' | 'O' | null
+let timerStartMs = null;       // Date.now() when this turn's countdown began
+let timerXatStart = 0;         // x_time_left when this turn began
+let timerOatStart = 0;         // o_time_left when this turn began
+let lastActivePlayer = null;
 
 let clientId = localStorage.getItem('qttt_client_id');
 if (!clientId) {
@@ -738,90 +747,94 @@ const playSound = (type) => {
   }
 };
 
-let timeLeft = 60;
-let activeTimerPlayer = null;
-let lastServerTime = null;
+// ── Format seconds → M:SS ─────────────────────────────────────────────────
+function formatTime(secs) {
+  const s = Math.max(0, Math.floor(secs));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
 
-function startTimer(player, serverTimeLeft) {
-  if (activeTimerPlayer === player && turnInterval !== null) {
-      if (serverTimeLeft !== undefined && Math.abs(timeLeft - serverTimeLeft) > 1) {
-          timeLeft = serverTimeLeft;
-          updateTimerDisplay();
-      }
-      return; 
-  }
-  clearInterval(turnInterval);
-  activeTimerPlayer = player;
-  timeLeft = serverTimeLeft !== undefined ? serverTimeLeft : 60;
-  updateTimerDisplay();
-  
-  turnInterval = setInterval(async () => {
-    timeLeft--;
-    updateTimerDisplay();
-    if (timeLeft <= 0) {
-      clearInterval(turnInterval);
-      if (playerRole === activeTimerPlayer || gameMode === 'pve') {
-        const res = await api('/api/timeout/' + roomId, {});
-        if (res.state) render(res.state);
-      }
-    }
-  }, 1000);
+// Called whenever server gives us fresh time values (on poll or after move)
+function syncTimerFromServer(xLeft, oLeft, activePlayer) {
+  timerActivePlayer = activePlayer;
+  timerStartMs = Date.now();
+  timerXatStart = xLeft;
+  timerOatStart = oLeft;
+}
+
+// Compute current display values from timestamp
+function currentTimerValues() {
+  if (timerStartMs === null) return { x: timerXatStart, o: timerOatStart };
+  const elapsed = (Date.now() - timerStartMs) / 1000;
+  let x = timerXatStart, o = timerOatStart;
+  if (timerActivePlayer === 'X') x = Math.max(0, timerXatStart - elapsed);
+  else if (timerActivePlayer === 'O') o = Math.max(0, timerOatStart - elapsed);
+  return { x, o };
 }
 
 function updateTimerDisplay() {
-  if (state && state.x_time_left !== undefined && state.o_time_left !== undefined) {
-    const formatTime = (t) => {
-      const totalSecs = Math.floor(t);
-      const mins = Math.floor(totalSecs / 60);
-      const secs = totalSecs % 60;
-      if (mins >= 10) {
-        return mins + ':' + String(secs).padStart(2, '0');
-      }
-      return mins + ':' + String(secs).padStart(2, '0');
-    };
-    document.getElementById('timer-o').textContent = formatTime(state.o_time_left);
-    document.getElementById('timer-x').textContent = formatTime(state.x_time_left);
-  }
+  const { x, o } = currentTimerValues();
+  document.getElementById('timer-x').textContent = formatTime(x);
+  document.getElementById('timer-o').textContent = formatTime(o);
+}
+
+function startLocalTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(async () => {
+    if (!state || !state.players_ready || state.status === 'finished') return;
+    updateTimerDisplay();
+    // Check for timeout
+    const { x, o } = currentTimerValues();
+    const timedOut = (timerActivePlayer === 'X' && x <= 0) || (timerActivePlayer === 'O' && o <= 0);
+    if (timedOut && roomId) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      const res = await api('/api/timeout/' + roomId, {});
+      if (res.state) render(res.state);
+    }
+  }, 100); // 100 ms — smooth display, no drift
+}
+
+function stopLocalTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
 }
 
 function manageTurnTimer(s) {
-    if (s.status === 'finished' || !s.players_ready) {
-        clearInterval(turnInterval);
-        turnInterval = null;
-        activeTimerPlayer = null;
-        updateTimerDisplay();
-        document.getElementById('panel-o').classList.remove('active', 'active-o');
-        document.getElementById('panel-x').classList.remove('active');
-        lastActivePlayer = null;
-        return;
-    }
-
-    updateTimerDisplay();
-
     let activePlayer = null;
     if (s.status === 'playing') {
         activePlayer = s.current_player;
     } else if (s.status === 'collapse') {
-        activePlayer = s.pending.choosing_player;
+        activePlayer = s.pending && s.pending.choosing_player;
     }
 
-    if (activePlayer !== lastActivePlayer && lastActivePlayer !== null) {
-        lastServerTime = {
-            x: state.x_time_left,
-            o: state.o_time_left
-        };
-    }
-    lastActivePlayer = activePlayer;
-    
     document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
     document.getElementById('panel-x').classList.toggle('active', activePlayer === 'X');
 
+    if (s.status === 'finished' || !s.players_ready) {
+        stopLocalTimer();
+        timerActivePlayer = null;
+        timerStartMs = null;
+        // Show whatever the server reported
+        if (s.x_time_left !== undefined) {
+          timerXatStart = s.x_time_left;
+          timerOatStart = s.o_time_left;
+        }
+        updateTimerDisplay();
+        lastActivePlayer = null;
+        return;
+    }
+
+    // Sync timer from server state
+    syncTimerFromServer(s.x_time_left, s.o_time_left, activePlayer);
+    updateTimerDisplay();
+    lastActivePlayer = activePlayer;
+
     if (gameMode === 'pve' && s.status !== 'finished' && activePlayer !== playerRole) {
         isAITurn = true;
-        setTimeout(async () => {
-            const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
+        // No artificial delay — call AI immediately
+        api('/api/ai_move/' + roomId, { client_id: clientId }).then(res => {
             if (res.state) render(res.state);
-        }, 1000);
+        });
     } else {
         isAITurn = false;
     }
@@ -1023,60 +1036,101 @@ async function onBigCellClick(idx) {
 }
 
 async function onSlotClick(c, s) {
-  if (!state || isAITurn) return;
+  if (!state || isAITurn || pendingRequest) return;
+
+  // ── Collapse mode ──────────────────────────────────────────────────────────
   if (state.status === 'collapse') {
     if (playerRole === 'Spectator') return;
     const pd = state.pending;
     if (gameMode === 'pvp' && playerRole !== pd.choosing_player) return;
     const mark = state.cells[c].quantum[s];
-    if (mark && pd.cycle_pieces && pd.cycle_pieces.includes(mark.id)) {
-        const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
-        render(res.state);
-    }
+    if (!mark || !pd.cycle_pieces || !pd.cycle_pieces.includes(mark.id)) return;
+
+    // Optimistic: dim the board immediately to signal processing
+    pendingRequest = true;
+    playSound('collapse');
+    document.getElementById('board').style.opacity = '0.6';
+
+    const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
+    document.getElementById('board').style.opacity = '';
+    pendingRequest = false;
+    if (res.state) render(res.state);
     return;
   }
+
+  // ── Playing mode ───────────────────────────────────────────────────────────
   if (state.status !== 'playing' || playerRole === 'Spectator') return;
   if (gameMode === 'pvp' && playerRole !== state.current_player) return;
   const cell = state.cells[c];
-  if (cell.type === 'classical') return;   // 不能點傳統格
-  if (cell.quantum[s]) return; // 已有棋子
+  if (cell.type === 'classical') return;
+  if (cell.quantum[s]) return;
 
   if (firstMove === null) {
+    // Edge case: only one non-classical cell left
     let nonClassicalCount = 0;
     for (let i = 0; i < 9; i++) {
         if (state.cells[i].type !== 'classical') nonClassicalCount++;
     }
     if (nonClassicalCount === 1) {
         let dummyS = (s + 1) % 9;
-        while (state.cells[c].quantum[dummyS]) {
-            dummyS = (dummyS + 1) % 9;
-        }
+        while (state.cells[c].quantum[dummyS]) dummyS = (dummyS + 1) % 9;
+
+        // Optimistic: show piece immediately
+        const optState = optimisticPlace(state, c, s, c, dummyS);
+        render(optState);
+        pendingRequest = true;
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
-        render(res.state);
+        pendingRequest = false;
+        if (res.state) render(res.state);
         return;
     }
 
     firstMove = { c, s };
     playSound('click');
-    render(state);
+    render(state); // show selection highlight
   } else {
     if (firstMove.c === c && firstMove.s === s) {
-      firstMove = null;
-      playSound('click');
-      render(state);
-      return;
+      firstMove = null; playSound('click'); render(state); return;
     }
     if (c === firstMove.c) {
-      firstMove = null;
-      playSound('click');
-      render(state);
-      return;
+      firstMove = null; playSound('click'); render(state); return;
     }
     const { c: c1, s: s1 } = firstMove;
     firstMove = null;
+
+    // Optimistic: show piece on board immediately
+    playSound('place');
+    const optState = optimisticPlace(state, c1, s1, c, s);
+    render(optState);
+
+    pendingRequest = true;
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
-    render(res.state);
+    pendingRequest = false;
+    if (res.state) render(res.state);
   }
+}
+
+// Build a local optimistic state so the piece appears before server responds
+function optimisticPlace(s, c1, s1, c2, s2) {
+  // Deep-clone cells
+  const cells = s.cells.map(cell => ({
+    ...cell,
+    quantum: cell.quantum ? [...cell.quantum] : []
+  }));
+  const player = s.current_player;
+  const id = s.move_count + 1;
+  const name = player + id;
+  const mark = { name, player, id, partner: c2 };
+  const mark2 = { name, player, id, partner: c1 };
+  if (cells[c1].type !== 'classical') cells[c1].quantum[s1] = mark;
+  if (c1 !== c2 && cells[c2].type !== 'classical') cells[c2].quantum[s2] = mark2;
+  return {
+    ...s,
+    cells,
+    move_count: id,
+    // Flip player optimistically (server confirms)
+    current_player: player === 'X' ? 'O' : 'X'
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1132,59 +1186,30 @@ function enterGame(initialState) {
     prevPlayersReady = initialState.players_ready;
     render(initialState);
     if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(pollState, 1000);
+    pollInterval = setInterval(pollState, 2000); // poll every 2 s (timer is local)
     startLocalTimer();
 }
 
 async function pollState() {
-    if (!roomId) return;
+    if (!roomId || pendingRequest) return;
     const res = await api(`/api/state/${roomId}`);
-    if (res.error) return; 
-    if (res.x_time_left !== undefined && res.o_time_left !== undefined) {
-        state.x_time_left = res.x_time_left;
-        state.o_time_left = res.o_time_left;
+    if (res.error) return;
+    // Always sync timer from server (corrects any drift)
+    if (res.x_time_left !== undefined) {
         let activePlayer = res.current_player;
         if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
             activePlayer = res.pending.choosing_player;
         }
-        state.active_player = activePlayer;
-        lastServerTime = { x: res.x_time_left, o: res.o_time_left };
-        updateTimerDisplay();
+        syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
     }
+    // Only full re-render when something actually changed
     if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady) {
         prevPlayersReady = res.players_ready;
         render(res);
     }
 }
 
-function startLocalTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        if (lastServerTime && state && state.players_ready && state.status !== 'finished') {
-            let activePlayer = state.current_player;
-            if (state.status === 'collapse' && state.pending && state.pending.choosing_player) {
-                activePlayer = state.pending.choosing_player;
-            }
-            if (activePlayer === lastActivePlayer) {
-                if (activePlayer === 'X') {
-                    state.x_time_left = Math.max(0, lastServerTime.x - 1);
-                    lastServerTime.x = state.x_time_left;
-                } else if (activePlayer === 'O') {
-                    state.o_time_left = Math.max(0, lastServerTime.o - 1);
-                    lastServerTime.o = state.o_time_left;
-                }
-            }
-            updateTimerDisplay();
-        }
-    }, 1000);
-}
-
-let lastActivePlayer = null;
-
-function stopLocalTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-}
+// startLocalTimer / stopLocalTimer are defined above near manageTurnTimer
 
 async function showLobby() {
   playSound('click');
