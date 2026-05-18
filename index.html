@@ -1250,8 +1250,6 @@ async function refreshLobby() {
 
 async function joinRoomById(rid) {
   playSound('click');
-  clientId = Math.random().toString(36).substring(2);
-  localStorage.setItem('qttt_client_id', clientId);
   const res = await api('/api/join_room', { room_id: rid });
   if (res.error) return alert(res.error);
   roomId = rid;
@@ -1273,8 +1271,6 @@ async function joinRoom() {
   playSound('click');
   const rid = document.getElementById('join-room-id').value.trim();
   if (!rid) return alert("請輸入房間號碼 / Enter Room ID");
-  clientId = Math.random().toString(36).substring(2);
-  localStorage.setItem('qttt_client_id', clientId);
   const res = await api('/api/join_room', { room_id: rid });
   if (res.error) return alert(res.error);
   roomId = rid;
