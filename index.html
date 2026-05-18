@@ -909,14 +909,25 @@ async function maybeDoAIMove(s) {
         ? (s.pending && s.pending.choosing_player)
         : s.current_player;
     if (ap === playerRole) return; // human's turn
+    
     aiRunning = true;
     isAITurn = true;
+    let nextState = null;
     try {
         const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
-        if (res.state) render(res.state);
+        if (res.state) {
+            render(res.state);
+            nextState = res.state;
+        }
     } finally {
         aiRunning = false;
         isAITurn = false;
+    }
+
+    if (nextState) {
+        // If it's still AI's turn after the move (e.g. AI resolved a collapse, and now it's AI's turn to place)
+        // Wait a bit and trigger it again.
+        setTimeout(() => maybeDoAIMove(nextState), 500);
     }
 }
 
