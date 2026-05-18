@@ -55,58 +55,72 @@ class RoomState:
         self.o_last_update = None
         self.x_time_left = 60
         self.o_time_left = 60
+        self.x_paused = False
+        self.o_paused = False
+        self.x_paused_at = None
+        self.o_paused_at = None
 
     def get_state(self):
         import time
         st = self.game.get_state()
         players_ready = (self.mode == "pve") or (self.x is not None and self.o is not None)
-        
+
         now = time.time()
-        
+
         if st["status"] == "finished":
-            time_left = 0
             self.x_time_left = 0
             self.o_time_left = 0
+            self.x_paused = True
+            self.o_paused = True
         elif not players_ready:
-            time_left = 60
             self.x_time_left = 60
             self.o_time_left = 60
-            self.last_current_player = None
             self.x_time_spent = 0
             self.o_time_spent = 0
             self.x_last_update = None
             self.o_last_update = None
+            self.last_current_player = None
+            self.x_paused = False
+            self.o_paused = False
         else:
             if st["status"] == "collapse":
                 active_player = st.get("pending", {}).get("choosing_player")
             else:
                 active_player = st.get("current_player")
-            
+
             if active_player != self.last_current_player and self.last_current_player is not None:
-                if self.last_current_player == "X" and self.x_last_update is not None:
+                if self.last_current_player == "X" and self.x_last_update is not None and not self.x_paused:
                     self.x_time_spent += now - self.x_last_update
-                elif self.last_current_player == "O" and self.o_last_update is not None:
+                    self.x_paused = True
+                    self.x_paused_at = now
+                elif self.last_current_player == "O" and self.o_last_update is not None and not self.o_paused:
                     self.o_time_spent += now - self.o_last_update
-            
+                    self.o_paused = True
+                    self.o_paused_at = now
+
             if active_player == "X":
-                if self.x_last_update is not None:
-                    self.x_time_spent += now - self.x_last_update
+                if self.x_paused and self.x_paused_at is not None:
+                    self.x_time_spent += now - self.x_paused_at
+                    self.x_paused = False
+                    self.x_paused_at = None
                 self.x_last_update = now
                 self.x_time_left = max(0, 60 - self.x_time_spent)
                 time_left = self.x_time_left
             elif active_player == "O":
-                if self.o_last_update is not None:
-                    self.o_time_spent += now - self.o_last_update
+                if self.o_paused and self.o_paused_at is not None:
+                    self.o_time_spent += now - self.o_paused_at
+                    self.o_paused = False
+                    self.o_paused_at = None
                 self.o_last_update = now
                 self.o_time_left = max(0, 60 - self.o_time_spent)
                 time_left = self.o_time_left
             else:
                 time_left = 0
-            
+
             if active_player != self.last_current_player:
                 self.last_current_player = active_player
-        
-        st["time_left"] = time_left
+
+        st["time_left"] = time_left if 'time_left' in dir() else 0
         st["x_time_left"] = self.x_time_left
         st["o_time_left"] = self.o_time_left
         st["players_ready"] = players_ready
