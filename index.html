@@ -1280,6 +1280,7 @@ async function joinRoom() {
 
 document.getElementById('btn-menu').addEventListener('click', () => {
   playSound('click');
+  if (roomId) api('/api/leave/' + roomId, {});
   document.getElementById('main-menu').style.display = 'flex';
   document.getElementById('layout').style.display = 'none';
   clearInterval(turnInterval);
@@ -1298,6 +1299,12 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 });
 
 initBoard();
+
+window.addEventListener('beforeunload', () => {
+  if (roomId) {
+    navigator.sendBeacon('/api/leave/' + roomId, JSON.stringify({ client_id: clientId }));
+  }
+});
 // 剛載入時停在主選單，初始化語言
 updateUITexts();
 </script>

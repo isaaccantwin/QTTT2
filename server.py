@@ -23,11 +23,20 @@ def root():
 def lobby():
     return JSONResponse({"lobby": get_lobby_info()})
 
-class HeartbeatBody(BaseModel):
+class LeaveBody(BaseModel):
     client_id: str
 
-@app.post("/api/heartbeat/{room_id}")
-def heartbeat(room_id: str, body: HeartbeatBody):
+@app.post("/api/leave/{room_id}")
+def leave_room(room_id: str, body: LeaveBody):
+    if room_id not in rooms:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    r = rooms[room_id]
+    if r.x == body.client_id:
+        r.x = None
+    if r.o == body.client_id:
+        r.o = None
+    if r.x is None and r.o is None:
+        del rooms[room_id]
     return JSONResponse({"ok": True})
 
 class RoomState:
