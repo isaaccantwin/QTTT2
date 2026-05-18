@@ -1217,7 +1217,20 @@ async function onSlotClick(c, s) {
     pendingRequest = true;
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
     pendingRequest = false;
-    if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
+    if (res.error) {
+        alert(res.error);
+        // Revert optimistic state by re-rendering true server state if available, or just waiting for pollState
+        if (res.state) render(res.state);
+        else {
+            isAITurn = false; // Release lock so pollState can recover
+            // We can manually fetch state to recover
+            const recovery = await api('/api/state/' + roomId);
+            if (recovery.status) render(recovery);
+        }
+    } else if (res.state) {
+        render(res.state); 
+        await maybeDoAIMove(res.state); 
+    }
   }
 }
 
@@ -1323,7 +1336,15 @@ async function enterGame(initialState) {
 async function pollState() {
     if (!roomId || pendingRequest) return;
     const res = await api(`/api/state/${roomId}`);
-    if (res.error) return;
+    if (res.error) {
+        if (res.error === '找不到該房間' || res.error === 'Room not found') {
+            alert(currentLang === 'zh' ? '房間已遺失 (伺服器可能已重啟)，請重新建立房間。' : 'Room lost (server may have restarted). Please recreate room.');
+            roomId = null;
+            state = null;
+            showMenu();
+        }
+        return;
+    }
     // Always sync timer from server (corrects any drift)
     if (res.x_time_left !== undefined) {
         let activePlayer = res.current_player;
