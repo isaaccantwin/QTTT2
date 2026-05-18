@@ -511,11 +511,11 @@
   <div id="left-col">
     <details id="rules" open>
       <summary style="cursor:pointer;font-weight:600;color:var(--text);margin-bottom:1vh;font-size:1.8vh;">📖 遊戲規則</summary>
-      <div class="rule-line"><strong>1. 疊加狀態</strong>：每回合必須選擇「兩個不同的大格子」放置小棋子，代表它同時存在於兩格（尚未確定在哪）。</div>
-      <div class="rule-line"><strong>2. 形成糾纏</strong>：當多個不同的棋子被放在同一個大格子裡時，它們就互相「糾纏」了。</div>
-      <div class="rule-line"><strong>3. 循環塌縮（關鍵）</strong>：當糾纏的棋子形成一個「封閉的環」時，就會觸發塌縮！將由「對手（沒有製造出環的人）」來決定棋子的最終位置。</div>
-      <div class="rule-line"><strong>4. 選擇塌縮</strong>：對手必須點擊「發出綠色閃光的小棋子」，將其永久固定。這會引發連鎖反應，讓環上的棋子全部變成確定的大棋子。</div>
-      <div class="rule-line"><strong>5. 獲勝條件</strong>：當確定位置的「大棋子」連成三線即獲勝！若雙方同時連線，最大編號數字較小的一方贏。</div>
+      <div class="rule-line"><strong>1. 每次要畫兩個記號，而且要寫上數字（量子疊加）</strong>：每次輪到你時，你必須在「兩個不同的格子」裡畫上你的記號（例如叉叉或圈圈）。這代表你的棋子同時存在於這兩個格子中，處於一種「不確定到底在哪裡」的疊加狀態。另外，每一步都必須標上代表順序的數字（下角標），例如第一步畫兩個 X₁，第二步對手畫兩個 O₂，以此類推。這個數字順序在最後判定勝負時非常重要。</div>
+      <div class="rule-line"><strong>2. 一個格子可以擠很多個記號</strong>：只要格子還沒「確定」最終是誰的，任何玩家都可以把新的記號畫進去。所以一個格子裡可能會同時出現好幾種不同的記號（例如同時有 X₁、O₂、X₃ 等），這在遊戲中代表了粒子可以有不斷增加的疊加狀態。</div>
+      <div class="rule-line"><strong>3. 形成「閉環」就會引發「坍塌」（最核心的機制）</strong>：當雙方的記號在不同格子之間互相牽連，形成了一個封閉的迴圈（閉環）時，就會觸發「坍塌」現象。 例如：某個格子裡有 X₁ 和 O₆，另一個格子裡也有 X₁ 和 O₆，這樣這兩個格子就互相糾纏並繞成了一個圈。觸發坍塌時，由「沒有畫下引發閉環那一筆」的對手（另一位玩家），來決定記號最終出現在哪裡。</div>
+      <div class="rule-line"><strong>4. 連環效應（從不確定變成確定）</strong>：當對手決定了引發閉環的那個記號（例如 O₆）具體要在哪個格子出現後，這顆棋子的狀態就「確定」了（就像薛丁格的貓打開盒子被觀測到一樣）。 既然 O₆ 確定在 A 格子，那它原本分身的另一個 O₆ 就會從 B 格子消失；而原本在 A 格子裡跟它搶位子的 X₁ 就必須被趕到另一個地方去。這會引發一連串的「連環效應」，把原本糾纏在一起、不確定的記號，全部變成確定的單一狀態。</div>
+      <div class="rule-line"><strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉和圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰的「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。</div>
       <div class="rule-line"><span class="tag-x">X（叉）</span> 先手，<span class="tag-o">O（圈）</span> 後手。</div>
     </details>
     <div id="history-box">
@@ -621,11 +621,11 @@ const i18n = {
     btn_refresh: "🔄 Refresh",
     btn_back: "🔙 Back",
     rules_title: "📖 Rules",
-    rule_1: "<strong>1. Superposition:</strong> Each turn, place your mark in TWO different cells. It exists in both places at once.",
-    rule_2: "<strong>2. Entanglement:</strong> When different marks are in the same cell, they become entangled.",
-    rule_3: "<strong>3. Cyclic Collapse (Crucial):</strong> If a closed loop of entangled marks is formed, it triggers a collapse! The opponent (who didn't create the cycle) gets to decide the outcome.",
-    rule_4: "<strong>4. Choosing Collapse:</strong> The opponent clicks a blinking GREEN piece to lock it permanently. This triggers a chain reaction, settling all pieces in the loop into big classical marks.",
-    rule_5: "<strong>5. Victory:</strong> Connect 3 classical (big) marks in a row to win! If tied, the one with the lower maximum subscript wins.",
+    rule_1: "<strong>1. Draw Two Marks (Superposition):</strong> Each turn, you must place your mark in TWO different cells. This means your piece exists in both cells simultaneously in a superposition. Each move gets a subscript number (e.g., X₁, O₂). This sequence number is crucial for tie-breakers.",
+    rule_2: "<strong>2. Multiple Marks in One Cell:</strong> Until a cell collapses, anyone can add marks to it. A single cell might contain X₁, O₂, and X₃ simultaneously, representing increasing superposition.",
+    rule_3: "<strong>3. Cyclic Entanglement Causes Collapse (Core):</strong> When marks connect different cells in a closed loop, it triggers a \"Collapse\". The opponent (who didn't close the loop) gets to choose where the pieces finally settle.",
+    rule_4: "<strong>4. Chain Reaction (Uncertain to Certain):</strong> Once the opponent locks a piece into a cell (like Schrödinger's cat), its entangled twin disappears from the other cell, forcing other overlapping pieces to shift. This chain reaction settles the loop into classical big marks.",
+    rule_5: "<strong>5. Tie-Breaker:</strong> Collapses can cause both X and O to get 3-in-a-row simultaneously. In this case, look at the subscript numbers on the winning lines. The player whose line has the LOWER maximum number wins, as they completed their setup earlier!",
     rule_6: "<span class='tag-x'>X</span> goes first, <span class='tag-o'>O</span> goes second.",
     history_title: "📜 History",
     center_title: "⚛ Quantum Tic-Tac-Toe",
@@ -674,11 +674,11 @@ const i18n = {
     btn_refresh: "🔄 重新整理",
     btn_back: "🔙 回選單",
     rules_title: "📖 遊戲規則",
-    rule_1: "<strong>1. 疊加狀態</strong>：每回合必須選擇「兩個不同的大格子」放置小棋子，代表它同時存在於兩格（尚未確定在哪）。",
-    rule_2: "<strong>2. 形成糾纏</strong>：當多個不同的棋子被放在同一個大格子裡時，它們就互相「糾纏」了。",
-    rule_3: "<strong>3. 循環塌縮（關鍵）</strong>：當糾纏的棋子形成一個「封閉的環」時，就會觸發塌縮！將由「對手（沒有製造出環的人）」來決定棋子的最終位置。",
-    rule_4: "<strong>4. 選擇塌縮</strong>：對手必須點擊「發出綠色閃光的小棋子」，將其永久固定。這會引發連鎖反應，讓環上的棋子全部變成確定的大棋子。",
-    rule_5: "<strong>5. 獲勝條件</strong>：當確定位置的「大棋子」連成三線即獲勝！若雙方同時連線，最大編號數字較小的一方贏。",
+    rule_1: "<strong>1. 每次要畫兩個記號，而且要寫上數字（量子疊加）</strong>：每次輪到你時，你必須在「兩個不同的格子」裡畫上你的記號（例如叉叉或圈圈）。這代表你的棋子同時存在於這兩個格子中，處於一種「不確定到底在哪裡」的疊加狀態。另外，每一步都必須標上代表順序的數字（下角標），例如第一步畫兩個 X₁，第二步對手畫兩個 O₂，以此類推。這個數字順序在最後判定勝負時非常重要。",
+    rule_2: "<strong>2. 一個格子可以擠很多個記號</strong>：只要格子還沒「確定」最終是誰的，任何玩家都可以把新的記號畫進去。所以一個格子裡可能會同時出現好幾種不同的記號（例如同時有 X₁、O₂、X₃ 等），這在遊戲中代表了粒子可以有不斷增加的疊加狀態。",
+    rule_3: "<strong>3. 形成「閉環」就會引發「坍塌」（最核心的機制）</strong>：當雙方的記號在不同格子之間互相牽連，形成了一個封閉的迴圈（閉環）時，就會觸發「坍塌」現象。 例如：某個格子裡有 X₁ 和 O₆，另一個格子裡也有 X₁ 和 O₆，這樣這兩個格子就互相糾纏並繞成了一個圈。觸發坍塌時，由「沒有畫下引發閉環那一筆」的對手（另一位玩家），來決定記號最終出現在哪裡。",
+    rule_4: "<strong>4. 連環效應（從不確定變成確定）</strong>：當對手決定了引發閉環的那個記號（例如 O₆）具體要在哪個格子出現後，這顆棋子的狀態就「確定」了（就像薛丁格的貓打開盒子被觀測到一樣）。 既然 O₆ 確定在 A 格子，那它原本分身的另一個 O₆ 就會從 B 格子消失；而原本在 A 格子裡跟它搶位子的 X₁ 就必須被趕到另一個地方去。這會引發一連串的「連環效應」，把原本糾纏在一起、不確定的記號，全部變成確定的單一狀態。",
+    rule_5: "<strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉和圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰的「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。",
     rule_6: "<span class='tag-x'>X（叉）</span> 先手，<span class='tag-o'>O（圈）</span> 後手。",
     history_title: "📜 遊戲紀錄",
     center_title: "⚛ 量子圈圈叉叉",
