@@ -42,6 +42,10 @@ def leave_room(room_id: str, body: LeaveBody):
         del rooms[room_id]
     return JSONResponse({"ok": True})
 
+import os
+import threading
+import urllib.request
+
 class FeedbackBody(BaseModel):
     text: str
     room_id: str | None = None
@@ -60,9 +64,31 @@ def submit_feedback(body: FeedbackBody):
         "role": body.role
     }
     
-    # Save as JSONL (JSON Lines) for easy reading by AI or data pipelines
-    with open("feedback.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(feedback_data, ensure_ascii=False) + "\n")
+    # 1. 本地備份：Save as JSONL (如果主機支援寫入，例如本地開發時)
+    try:
+        with open("feedback.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(feedback_data, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # 忽略 Vercel 正式機唯讀檔案系統的寫入錯誤
+
+    # 2. Google Sheets 整合：透過 Webhook 傳送至 Google 試算表
+    webhook_url = os.environ.get("GOOGLE_SHEET_WEBHOOK_URL")
+    if webhook_url:
+        def send_to_sheet():
+            try:
+                req = urllib.request.Request(
+                    webhook_url, 
+                    data=json.dumps(feedback_data).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    pass
+            except Exception as e:
+                print(f"Google Sheet Webhook Error: {e}")
+        
+        # 使用 Thread 異步發送，不卡住使用者的 API 回應時間
+        threading.Thread(target=send_to_sheet).start()
         
     return JSONResponse({"ok": True})
 
