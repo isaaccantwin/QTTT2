@@ -1148,9 +1148,11 @@ function enterGame(initialState) {
 
 async function pollState() {
     if (!roomId) return;
-    await api(`/api/heartbeat/${roomId}`, {});
     const res = await api(`/api/state/${roomId}`);
-    if (res.error) return; 
+    if (res.error) {
+        document.getElementById('status-hint').textContent = res.error;
+        return;
+    } 
     if (res.x_time_left !== undefined && res.o_time_left !== undefined) {
         state.x_time_left = res.x_time_left;
         state.o_time_left = res.o_time_left;
