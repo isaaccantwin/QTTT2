@@ -1195,7 +1195,12 @@ async function onSlotClick(c, s) {
       firstMove = null; playSound('click'); render(state); return;
     }
     if (c === firstMove.c) {
-      firstMove = null; playSound('click'); render(state); return;
+      if (currentLang === 'en') {
+        alert('You must select a DIFFERENT big cell for your second mark!');
+      } else {
+        alert('必須選擇「不同」的大格子放置另一顆棋子！');
+      }
+      return;
     }
     const { c: c1, s: s1 } = firstMove;
     firstMove = null;
