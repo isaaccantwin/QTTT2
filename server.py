@@ -190,7 +190,6 @@ def join_room(body: JoinRoomBody):
 def get_state(room_id: str):
     if room_id not in rooms:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    cleanup_rooms()
     return JSONResponse(rooms[room_id].get_state())
 
 class PlaceBody(BaseModel):
