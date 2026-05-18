@@ -51,6 +51,7 @@
     flex-direction: column;
     gap: 2vh;
     width: 24vw;
+    max-height: 85vh;
   }
   #center-col {
     display: flex;
@@ -299,9 +300,12 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1.5vh 1.5vw;
-    font-size: 1.5vh;
+    font-size: 1.4vh;
     color: var(--muted);
     line-height: 1.6;
+    max-height: 45vh;
+    overflow-y: auto;
+    flex-shrink: 0;
   }
   #rules strong { color: var(--text); }
   #rules .tag-x { color: var(--x-col); font-weight: 700; }
