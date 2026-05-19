@@ -1303,8 +1303,11 @@ function showGameOver(winner) {
 async function resetGame() {
   if (playerRole === 'Spectator') return alert("觀戰者無法重新開始");
   firstMove = null;
+  aiRunning = false;
+  isAITurn = false;
   const res = await api('/api/reset/' + roomId, {});
   render(res.state);
+  await maybeDoAIMove(res.state);
 }
 
 async function enterGame(initialState) {
