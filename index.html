@@ -1330,6 +1330,8 @@ async function enterGame(initialState) {
 
     prevPlayersReady = initialState.players_ready;
     aiRunning = false;
+    console.log('enterGame state:', JSON.stringify(initialState));
+    document.getElementById('room-info').textContent += ` | status: ${initialState.status}, ready: ${initialState.players_ready}`;
     render(initialState);
     if (pollInterval) clearInterval(pollInterval);
     // Spectators poll more frequently since they have no optimistic UI
