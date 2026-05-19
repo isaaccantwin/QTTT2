@@ -313,6 +313,7 @@ class QuantumGame:
                     if m:
                         p = QuantumPiece(m["id"], m["player"], m["c1"], m["s1"], m["c2"], m["s2"])
                         self.quantum[i].append(p)
+                        self.adj[i].append(p)
                         self.pieces[p.id] = p
 
         self.move_count = st["move_count"]
