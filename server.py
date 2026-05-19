@@ -38,6 +38,23 @@ def debug():
         "redis_error": redis_error
     })
 
+@app.get("/api/debug_room/{room_id}")
+def debug_room(room_id: str):
+    r = load_room(room_id)
+    if r is None:
+        return JSONResponse({"error": "Room not found"}, status_code=404)
+    return JSONResponse({
+        "mode": r.mode,
+        "x": r.x,
+        "o": r.o,
+        "game_status": r.game.status.value,
+        "current_player": r.game.current_player,
+        "move_count": r.game.move_count,
+        "adj": {i: len(p) for i, p in r.game.adj.items()},
+        "classical": list(r.game.classical.keys()),
+        "pending": r.game.pending
+    })
+
 @app.get("/")
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
@@ -441,7 +458,7 @@ def ai_move(room_id: str, body: AIMoveBody):
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     game = r.game
-    print(f"ai_move: status={game.status}, adj={[(i, len(p)) for i, p in game.adj.items()]}")
+
     if game.status == GameStatus.PLAYING:
         valid_spots = []
         for i in range(9):
@@ -456,15 +473,13 @@ def ai_move(room_id: str, body: AIMoveBody):
             valid_c2 = [x for x in valid_spots if x[0] != c1s1[0]]
             if valid_c2:
                 c2s2 = random.choice(valid_c2)
-                result = game.place(c1s1[0], c1s1[1], c2s2[0], c2s2[1])
+                game.place(c1s1[0], c1s1[1], c2s2[0], c2s2[1])
             else:
                 c2s2 = random.choice([x for x in valid_spots if x != c1s1])
-                result = game.place(c1s1[0], c1s1[1], c1s1[0], c2s2[1])
-            print(f"  place result: {result}, new status: {game.status}")
+                game.place(c1s1[0], c1s1[1], c1s1[0], c2s2[1])
 
         # Check if place() caused a collapse
         if game.status == GameStatus.COLLAPSE:
-            print(f"  COLLAPSE detected! pending: {game.pending}")
             pd = game.pending
             cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
             pid = random.choice(cycle_pieces)
