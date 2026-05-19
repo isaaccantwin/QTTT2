@@ -6,6 +6,7 @@ server.py — Quantum Tic-Tac-Toe 極簡後端
 
 import time
 import uvicorn
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -18,9 +19,12 @@ from game_logic import QuantumGame, GameStatus
 try:
     import redis
     kv = redis.from_url(os.environ.get("KV_REST_API_URL"))
+    kv.ping()
     USE_REDIS = True
-except Exception:
+    print("✅ Redis connected")
+except Exception as e:
     USE_REDIS = False
+    print(f"❌ Redis not available: {e}")
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
 
@@ -54,7 +58,6 @@ def leave_room(room_id: str, body: LeaveBody):
             rooms[room_id] = r
     return JSONResponse({"ok": True})
 
-import os
 import threading
 import urllib.request
 
