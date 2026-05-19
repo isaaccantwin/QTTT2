@@ -278,7 +278,8 @@ class QuantumGame:
                 for q in self.quantum[i]:
                     marks[q.get_subcell(i)] = {
                         "name": q.name, "player": q.player, "id": q.id,
-                        "partner": q.other(i)
+                        "partner": q.other(i),
+                        "c1": q.c1, "s1": q.s1, "c2": q.c2, "s2": q.s2
                     }
                 cells.append({
                     "type": "quantum",
@@ -310,7 +311,7 @@ class QuantumGame:
             else:
                 for s, m in enumerate(c["quantum"]):
                     if m:
-                        p = QuantumPiece(m["id"], m["player"], i, s, i, s)
+                        p = QuantumPiece(m["id"], m["player"], m["c1"], m["s1"], m["c2"], m["s2"])
                         self.quantum[i].append(p)
                         self.pieces[p.id] = p
 
