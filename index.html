@@ -541,6 +541,7 @@
     <div id="board"></div>
 
     <div id="controls">
+      <button id="btn-play-again">🔄 再來一場</button>
       <button id="btn-menu">🔙 回主選單</button>
     </div>
 
@@ -636,6 +637,7 @@ const i18n = {
     status_loading: "Loading...",
     waiting_opponent: "⏳ Waiting for opponent to join...",
     btn_menu: "🔙 Main Menu",
+    btn_play_again: "🔄 Play Again",
     o_title: "O",
     x_title: "X",
     victory_text: "🏆 Victory!",
@@ -689,6 +691,7 @@ const i18n = {
     status_loading: "載入中...",
     waiting_opponent: "⏳ 等待對手加入...",
     btn_menu: "🔙 回主選單",
+    btn_play_again: "🔄 再來一場",
     o_title: "O（圈）",
     x_title: "X（叉）",
     victory_text: "🏆 勝利！",
@@ -750,6 +753,7 @@ function updateUITexts() {
   document.querySelector('#history-box h3').textContent = t('history_title');
   document.querySelector('#center-col h1').innerHTML = t('center_title');
   document.querySelector('#btn-menu').textContent = t('btn_menu');
+  document.querySelector('#btn-play-again').textContent = t('btn_play_again');
   document.querySelector('#panel-o h2').textContent = t('o_title');
   document.querySelector('#panel-x h2').textContent = t('x_title');
   document.querySelectorAll('.victory-message').forEach(el => {
@@ -1465,6 +1469,15 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   firstMove = null;
   roomId = null;
   playerRole = null;
+});
+
+document.getElementById('btn-play-again').addEventListener('click', () => {
+  playSound('click');
+  if (playerRole === 'Spectator') {
+    alert(currentLang === 'zh' ? '觀戰者無法重新開始' : 'Spectators cannot restart the game');
+    return;
+  }
+  resetGame();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
