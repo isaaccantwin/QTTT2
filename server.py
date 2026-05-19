@@ -16,6 +16,7 @@ import datetime
 
 from game_logic import QuantumGame, GameStatus
 
+redis_error = None
 try:
     import redis
     kv = redis.from_url(os.environ.get("KV_REST_API_URL"))
@@ -24,6 +25,7 @@ try:
     print("✅ Redis connected")
 except Exception as e:
     USE_REDIS = False
+    redis_error = str(e)
     print(f"❌ Redis not available: {e}")
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
@@ -32,7 +34,8 @@ app = FastAPI(title="Quantum Tic-Tac-Toe")
 def debug():
     return JSONResponse({
         "redis_connected": USE_REDIS,
-        "redis_url": os.environ.get("KV_REST_API_URL", "")[:30] + "..." if os.environ.get("KV_REST_API_URL") else "not set"
+        "redis_url": os.environ.get("KV_REST_API_URL", "")[:30] + "..." if os.environ.get("KV_REST_API_URL") else "not set",
+        "redis_error": redis_error
     })
 
 @app.get("/")
