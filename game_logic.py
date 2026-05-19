@@ -295,3 +295,29 @@ class QuantumGame:
             "winning_lines":  self.winning_lines,
             "history":        self.history,
         }
+
+    def restore_state(self, st: dict):
+        self.quantum = {i: [] for i in range(9)}
+        self.classical = {}
+        self.adj = {i: [] for i in range(9)}
+        self.pieces = {}
+
+        for i, c in enumerate(st["cells"]):
+            if c["type"] == "classical":
+                p = QuantumPiece(c["id"], c["player"], i, 0, i, 0)
+                self.classical[i] = p
+                self.pieces[p.id] = p
+            else:
+                for s, m in enumerate(c["quantum"]):
+                    if m:
+                        p = QuantumPiece(m["id"], m["player"], i, s, i, s)
+                        self.quantum[i].append(p)
+                        self.pieces[p.id] = p
+
+        self.move_count = st["move_count"]
+        self.status = GameStatus(st["status"])
+        self.current_player = st["current_player"]
+        self.pending = st.get("pending")
+        self.winner = st.get("winner")
+        self.winning_lines = st.get("winning_lines", [])
+        self.history = st.get("history", [])

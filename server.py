@@ -201,13 +201,33 @@ rooms: dict[str, RoomState] = {}
 
 def save_room(room_id: str, r: RoomState):
     if USE_REDIS:
-        kv.set(f"room:{room_id}", r.model_dump_json(), ex=3600)
+        data = {
+            "game": r.game.get_state(),
+            "mode": r.mode,
+            "x": r.x,
+            "o": r.o,
+            "x_time_remaining": r.x_time_remaining,
+            "o_time_remaining": r.o_time_remaining,
+            "turn_start_time": r.turn_start_time,
+            "last_active_player": r.last_active_player
+        }
+        kv.set(f"room:{room_id}", json.dumps(data), ex=3600)
 
 def load_room(room_id: str) -> RoomState | None:
     if USE_REDIS:
         data = kv.get(f"room:{room_id}")
         if data:
-            return RoomState.model_validate_json(data)
+            d = json.loads(data)
+            r = RoomState(d["mode"])
+            r.game = QuantumGame()
+            r.game.restore_state(d["game"])
+            r.x = d["x"]
+            r.o = d["o"]
+            r.x_time_remaining = d["x_time_remaining"]
+            r.o_time_remaining = d["o_time_remaining"]
+            r.turn_start_time = d["turn_start_time"]
+            r.last_active_player = d["last_active_player"]
+            return r
     return None
 
 def delete_room(room_id: str):
