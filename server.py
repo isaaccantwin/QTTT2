@@ -245,6 +245,7 @@ class CreateRoomBody(BaseModel):
 
 @app.post("/api/create_room")
 def create_room(body: CreateRoomBody):
+    print(f"create_room: mode={body.mode}, client_id={body.client_id[:8]}...")
     room_id = str(random.randint(1000, 9999))
     while load_room(room_id) is not None:
         room_id = str(random.randint(1000, 9999))
@@ -257,8 +258,10 @@ def create_room(body: CreateRoomBody):
         role = "X"
     if USE_REDIS:
         save_room(room_id, r)
+        print(f"  saved to Redis: room_id={room_id}, role={role}")
     else:
         rooms[room_id] = r
+        print(f"  saved to memory: room_id={room_id}, role={role}")
     return JSONResponse({"room_id": room_id, "role": role, "state": r.get_state()})
 
 class JoinRoomBody(BaseModel):

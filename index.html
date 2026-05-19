@@ -1441,6 +1441,7 @@ async function joinRoomById(rid) {
 async function createRoom(mode) {
   playSound('click');
   const res = await api('/api/create_room', { mode: mode });
+  console.log('createRoom response:', res);
   roomId = res.room_id;
   playerRole = res.role;
   gameMode = mode;
