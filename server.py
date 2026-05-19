@@ -28,6 +28,13 @@ except Exception as e:
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
 
+@app.get("/api/debug")
+def debug():
+    return JSONResponse({
+        "redis_connected": USE_REDIS,
+        "redis_url": os.environ.get("KV_REST_API_URL", "")[:30] + "..." if os.environ.get("KV_REST_API_URL") else "not set"
+    })
+
 @app.get("/")
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
