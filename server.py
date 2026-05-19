@@ -216,6 +216,7 @@ def save_room(room_id: str, r: RoomState):
 def load_room(room_id: str) -> RoomState | None:
     if USE_REDIS:
         data = kv.get(f"room:{room_id}")
+        print(f"load_room: room_id={room_id}, found={data is not None}")
         if data:
             d = json.loads(data)
             r = RoomState(d["mode"])
@@ -227,6 +228,7 @@ def load_room(room_id: str) -> RoomState | None:
             r.o_time_remaining = d["o_time_remaining"]
             r.turn_start_time = d["turn_start_time"]
             r.last_active_player = d["last_active_player"]
+            print(f"  loaded: x={r.x}, o={r.o}, move_count={r.game.move_count}")
             return r
     return None
 

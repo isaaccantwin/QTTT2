@@ -1331,7 +1331,7 @@ async function enterGame(initialState) {
     prevPlayersReady = initialState.players_ready;
     aiRunning = false;
     console.log('enterGame state:', JSON.stringify(initialState));
-    document.getElementById('room-info').textContent += ` | status: ${initialState.status}, ready: ${initialState.players_ready}`;
+    document.getElementById('room-info').textContent += ` | status: ${initialState.status}, ready: ${initialState.players_ready}, move: ${initialState.move_count}`;
     render(initialState);
     if (pollInterval) clearInterval(pollInterval);
     // Spectators poll more frequently since they have no optimistic UI
@@ -1345,6 +1345,7 @@ async function enterGame(initialState) {
 async function pollState() {
     if (!roomId || pendingRequest) return;
     const res = await api(`/api/state/${roomId}`);
+    console.log('pollState response:', res);
     if (res.error) {
         if (res.error === '找不到該房間' || res.error === 'Room not found') {
             alert(currentLang === 'zh' ? '房間已遺失 (伺服器可能已重啟)，請重新建立房間。' : 'Room lost (server may have restarted). Please recreate room.');
