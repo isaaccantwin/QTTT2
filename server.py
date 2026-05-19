@@ -15,6 +15,13 @@ import datetime
 
 from game_logic import QuantumGame, GameStatus
 
+try:
+    import redis
+    kv = redis.from_url(os.environ.get("KV_REST_API_URL"))
+    USE_REDIS = True
+except Exception:
+    USE_REDIS = False
+
 app = FastAPI(title="Quantum Tic-Tac-Toe")
 
 @app.get("/")
@@ -31,15 +38,20 @@ class LeaveBody(BaseModel):
 
 @app.post("/api/leave/{room_id}")
 def leave_room(room_id: str, body: LeaveBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
     if r.x == body.client_id:
         r.x = None
     if r.o == body.client_id:
         r.o = None
     if r.x is None and r.o is None:
-        del rooms[room_id]
+        delete_room(room_id)
+    else:
+        if USE_REDIS:
+            save_room(room_id, r)
+        else:
+            rooms[room_id] = r
     return JSONResponse({"ok": True})
 
 import os
@@ -174,19 +186,42 @@ class RoomState:
 
 rooms: dict[str, RoomState] = {}
 
+def save_room(room_id: str, r: RoomState):
+    if USE_REDIS:
+        kv.set(f"room:{room_id}", r.model_dump_json(), ex=3600)
+
+def load_room(room_id: str) -> RoomState | None:
+    if USE_REDIS:
+        data = kv.get(f"room:{room_id}")
+        if data:
+            return RoomState.model_validate_json(data)
+    return None
+
+def delete_room(room_id: str):
+    if USE_REDIS:
+        kv.delete(f"room:{room_id}")
+
+def get_all_room_ids() -> list[str]:
+    if USE_REDIS:
+        return [k.decode().split(":")[1] for k in kv.keys("room:*")]
+    return list(rooms.keys())
+
 def get_lobby_info():
     lobby = []
-    for room_id, r in rooms.items():
-        state = r.get_state()
-        if not state["players_ready"]:
-            lobby.append({
-                "room_id": room_id,
-                "mode": r.mode,
-                "players": {
-                    "X": r.x[:8] + "..." if r.x else None,
-                    "O": r.o[:8] + "..." if r.o else None
-                }
-            })
+    room_ids = get_all_room_ids()
+    for room_id in room_ids:
+        r = load_room(room_id)
+        if r:
+            state = r.get_state()
+            if not state["players_ready"]:
+                lobby.append({
+                    "room_id": room_id,
+                    "mode": r.mode,
+                    "players": {
+                        "X": r.x[:8] + "..." if r.x else None,
+                        "O": r.o[:8] + "..." if r.o else None
+                    }
+                })
     return lobby
 
 # ── HTTP ──────────────────────────────────────────────────────────────────────
@@ -198,7 +233,7 @@ class CreateRoomBody(BaseModel):
 @app.post("/api/create_room")
 def create_room(body: CreateRoomBody):
     room_id = str(random.randint(1000, 9999))
-    while room_id in rooms:
+    while load_room(room_id) is not None:
         room_id = str(random.randint(1000, 9999))
     r = RoomState(body.mode)
     if body.mode == "pve":
@@ -207,7 +242,10 @@ def create_room(body: CreateRoomBody):
     else:
         r.x = body.client_id
         role = "X"
-    rooms[room_id] = r
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({"room_id": room_id, "role": role, "state": r.get_state()})
 
 class JoinRoomBody(BaseModel):
@@ -216,9 +254,9 @@ class JoinRoomBody(BaseModel):
 
 @app.post("/api/join_room")
 def join_room(body: JoinRoomBody):
-    if body.room_id not in rooms:
+    r = load_room(body.room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[body.room_id]
     if r.x == body.client_id:
         role = "X"
     elif r.o == body.client_id:
@@ -228,13 +266,18 @@ def join_room(body: JoinRoomBody):
         role = "O"
     else:
         role = "Spectator"
+    if USE_REDIS:
+        save_room(body.room_id, r)
+    else:
+        rooms[body.room_id] = r
     return JSONResponse({"role": role, "state": r.get_state()})
 
 @app.get("/api/state/{room_id}")
 def get_state(room_id: str):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    return JSONResponse(rooms[room_id].get_state())
+    return JSONResponse(r.get_state())
 
 class PlaceBody(BaseModel):
     client_id: str
@@ -245,9 +288,9 @@ class PlaceBody(BaseModel):
 
 @app.post("/api/place/{room_id}")
 def place(room_id: str, body: PlaceBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
 
     if r.mode == "pvp":
         cp = r.game.current_player
@@ -263,6 +306,10 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "你不是玩家 O"}, status_code=403)
 
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({**result, "state": r.get_state()})
 
 class ResolveBody(BaseModel):
@@ -272,9 +319,9 @@ class ResolveBody(BaseModel):
 
 @app.post("/api/resolve/{room_id}")
 def resolve(room_id: str, body: ResolveBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
 
     if r.mode == "pvp":
         cp = r.game.pending.get("choosing_player") if r.game.pending else None
@@ -290,6 +337,10 @@ def resolve(room_id: str, body: ResolveBody):
             return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({**result, "state": r.get_state()})
 
 class TimeoutBody(BaseModel):
@@ -297,9 +348,9 @@ class TimeoutBody(BaseModel):
 
 @app.post("/api/timeout/{room_id}")
 def timeout(room_id: str, body: TimeoutBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
     game = r.game
     st = r.get_state()  # updates timer state first
 
@@ -316,6 +367,10 @@ def timeout(room_id: str, body: TimeoutBody):
         game.winning_lines = []
         r.turn_start_time = None
 
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({"state": r.get_state()})
 
 class ResetBody(BaseModel):
@@ -323,9 +378,9 @@ class ResetBody(BaseModel):
 
 @app.post("/api/reset/{room_id}")
 def reset(room_id: str, body: ResetBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
     if r.mode == "pvp" and body.client_id not in (r.x, r.o):
         return JSONResponse({"error": "觀戰者無法重新開始"}, status_code=403)
     r.game = QuantumGame()
@@ -333,6 +388,10 @@ def reset(room_id: str, body: ResetBody):
     r.o_time_remaining = 60.0
     r.turn_start_time = None
     r.last_active_player = None
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({"ok": True, "state": r.get_state()})
 
 class AIMoveBody(BaseModel):
@@ -340,9 +399,9 @@ class AIMoveBody(BaseModel):
 
 @app.post("/api/ai_move/{room_id}")
 def ai_move(room_id: str, body: AIMoveBody):
-    if room_id not in rooms:
+    r = load_room(room_id)
+    if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
-    r = rooms[room_id]
     game = r.game
     if game.status == GameStatus.PLAYING:
         valid_spots = []
@@ -372,6 +431,10 @@ def ai_move(room_id: str, body: AIMoveBody):
             chosen_cell = random.choice([piece.c1, piece.c2])
             game.resolve(pid, chosen_cell)
 
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
     return JSONResponse({"ok": True, "state": r.get_state()})
 
 # ── 啟動 ──────────────────────────────────────────────────────────────────────
