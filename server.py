@@ -206,6 +206,10 @@ class RoomState:
         st["o_time_left"] = round(o_display, 3)
         st["players_ready"] = players_ready
         st["mode"] = self.mode
+        st["has_x"] = self.x is not None
+        st["has_o"] = self.o is not None
+        st["x_client_id"] = self.x
+        st["o_client_id"] = self.o
         return st
 
 
@@ -288,8 +292,7 @@ def create_room(body: CreateRoomBody):
         r.o = body.client_id
         role = "O"
     else:
-        r.x = body.client_id
-        role = "X"
+        role = "Spectator"
     if USE_REDIS:
         save_room(room_id, r)
         print(f"  saved to Redis: room_id={room_id}, role={role}")
@@ -311,9 +314,6 @@ def join_room(body: JoinRoomBody):
         role = "X"
     elif r.o == body.client_id:
         role = "O"
-    elif r.o is None and r.mode == "pvp" and r.x != body.client_id:
-        r.o = body.client_id
-        role = "O"
     else:
         role = "Spectator"
     if USE_REDIS:
@@ -328,6 +328,38 @@ def get_state(room_id: str):
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     return JSONResponse(r.get_state())
+
+class TakeSeatBody(BaseModel):
+    client_id: str
+    role: str
+
+@app.post("/api/take_seat/{room_id}")
+def take_seat(room_id: str, body: TakeSeatBody):
+    r = load_room(room_id)
+    if r is None:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    if body.role not in ["X", "O"]:
+        return JSONResponse({"error": "無效的角色"}, status_code=400)
+    
+    # 檢查是否已入座
+    if r.x == body.client_id or r.o == body.client_id:
+        return JSONResponse({"error": "您已入座"}, status_code=400)
+        
+    if body.role == "X":
+        if r.x is not None:
+            return JSONResponse({"error": "X 座位已被佔用"}, status_code=400)
+        r.x = body.client_id
+    elif body.role == "O":
+        if r.o is not None:
+            return JSONResponse({"error": "O 座位已被佔用"}, status_code=400)
+        r.o = body.client_id
+
+    if USE_REDIS:
+        save_room(room_id, r)
+    else:
+        rooms[room_id] = r
+    
+    return JSONResponse({"role": body.role, "state": r.get_state()})
 
 class PlaceBody(BaseModel):
     client_id: str

@@ -660,11 +660,13 @@
       <h2>O（圈）</h2>
       <div class="timer" id="timer-o">--</div>
       <div class="victory-message" id="victory-o">🏆 勝利！</div>
+      <button id="btn-seat-o" class="btn-seat" onclick="takeSeat('O')" style="display:none; margin-top: 10px; padding: 5px 10px; background: var(--pink); color: #fff; border:none; border-radius: 4px; cursor: pointer;">入座 O</button>
     </div>
     <div id="panel-x" class="player-panel">
       <h2>X（叉）</h2>
       <div class="timer" id="timer-x">--</div>
       <div class="victory-message" id="victory-x">🏆 勝利！</div>
+      <button id="btn-seat-x" class="btn-seat" onclick="takeSeat('X')" style="display:none; margin-top: 10px; padding: 5px 10px; background: var(--cyan); color: #fff; border:none; border-radius: 4px; cursor: pointer;">入座 X</button>
     </div>
   </div>
 </div>
@@ -762,7 +764,10 @@ const i18n = {
     err_not_cycle: "This piece is not in the cycle. 👉 Click a blinking GREEN piece!",
     hist_place: "Move {m}: {p} placed on {c1} & {c2}",
     hist_place_same: "Move {m}: {p} placed on {c1} (Auto)",
-    hist_collapse: "⚠️ {c} collapsed {p} into cell {cell}"
+    hist_collapse: "⚠️ {c} collapsed {p} into cell {cell}",
+    take_seat_x: "Sit as X",
+    take_seat_o: "Sit as O",
+    waiting_seat: "Waiting for players to take seats..."
   },
   zh: {
     menu_title: "⚛ 量子圈圈叉叉",
@@ -816,7 +821,10 @@ const i18n = {
     err_not_cycle: "這個棋子不在目前的糾纏環中，👉 請點選發出綠色閃光的小棋子！",
     hist_place: "第 {m} 步：{p} 放於格子 {c1} 與 {c2}",
     hist_place_same: "第 {m} 步：{p} 放置於 {c1}",
-    hist_collapse: "⚠️ {c} 選擇讓 {p} 塌縮至格子 {cell}"
+    hist_collapse: "⚠️ {c} 選擇讓 {p} 塌縮至格子 {cell}",
+    take_seat_x: "入座 X",
+    take_seat_o: "入座 O",
+    waiting_seat: "等待雙方入座..."
   }
 };
 
@@ -841,6 +849,8 @@ function updateUITexts() {
   document.querySelector('#btn-lobby').textContent = t('btn_lobby');
   document.querySelector('#btn-pvp').textContent = t('btn_pvp');
   document.querySelector('#btn-pve').textContent = t('btn_pve');
+  document.querySelector('#btn-seat-x').textContent = t('take_seat_x');
+  document.querySelector('#btn-seat-o').textContent = t('take_seat_o');
   
   document.querySelector('#rules summary').innerHTML = t('rules_title');
   const rulesLines = document.querySelectorAll('#rules .rule-line');
@@ -1104,6 +1114,17 @@ function initBoard() {
   }
 }
 
+async function takeSeat(role) {
+    if (!roomId) return;
+    const res = await api('/api/take_seat/' + roomId, { role });
+    if (res.error) {
+        alert(res.error);
+        return;
+    }
+    playerRole = res.role;
+    if (res.state) render(res.state, true);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 渲染
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1113,6 +1134,18 @@ function render(s_state, isFresh = false) {
 
   prevStatus = state.status;
   prevMoveCount = state.move_count;
+
+  // Handle seat buttons
+  const btnX = document.getElementById('btn-seat-x');
+  const btnO = document.getElementById('btn-seat-o');
+  
+  if (state.status === 'playing' || state.status === 'collapse' || !state.players_ready) {
+      btnX.style.display = (!state.has_x && playerRole === 'Spectator') ? 'inline-block' : 'none';
+      btnO.style.display = (!state.has_o && playerRole === 'Spectator') ? 'inline-block' : 'none';
+  } else {
+      btnX.style.display = 'none';
+      btnO.style.display = 'none';
+  }
 
   if (prevStatus === 'playing' && state.status === 'collapse') {
       playSound('collapse');
@@ -1184,10 +1217,14 @@ function render(s_state, isFresh = false) {
 
   // ── 狀態列 ──
   if (!state.players_ready) {
-    statusMain.innerHTML = t('waiting_opponent');
-    statusHint.textContent = '';
-    document.querySelectorAll('.selected-first').forEach(e => e.classList.remove('selected-first'));
-    document.querySelectorAll('.selected-slot').forEach(e => e.classList.remove('selected-slot'));
+      if (!state.has_x || !state.has_o) {
+          statusMain.textContent = t('waiting_seat');
+      } else {
+          statusMain.textContent = t('waiting_opponent');
+      }
+      statusHint.textContent = '';
+      document.querySelectorAll('.selected-first').forEach(e => e.classList.remove('selected-first'));
+      document.querySelectorAll('.selected-slot').forEach(e => e.classList.remove('selected-slot'));
   } else if (state.status === 'playing') {
     const px = state.current_player === 'X' ? t('turn_x') : t('turn_o');
     statusMain.innerHTML = `${px}${t('prompt_place')}`;
@@ -1289,7 +1326,7 @@ async function onSlotClick(c, s) {
   }
 
   // ── Playing mode ───────────────────────────────────────────────────────────
-  if (state.status !== 'playing' || playerRole === 'Spectator') return;
+  if (state.status !== 'playing' || playerRole === 'Spectator' || !state.players_ready) return;
   if (gameMode === 'pvp' && playerRole !== state.current_player) return;
   const cell = state.cells[c];
   if (cell.type === 'classical') return;
