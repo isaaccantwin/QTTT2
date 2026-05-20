@@ -4,29 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>量子圈圈叉叉 Quantum Tic-Tac-Toe</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:      #F5F7F4; /* 淺森林米色 */
-    --panel:   #FFFFFF; /* 純白面板 */
-    --border:  #D1D9D3; /* 柔和灰綠色邊界 */
-    --cyan:    #4A7C59; /* 主題綠 */
-    --orange:  #D97C48; /* 陶土橘 */
-    --green:   #6EBF8B; /* 鼠尾草綠（高光） */
-    --muted:   #8E9F90; /* 灰綠色文字 */
-    --text:    #2C3E32; /* 深森林綠文字 */
-    --x-col:   #4A7C59; /* X 用森林綠 */
-    --o-col:   #D97C48; /* O 用陶土橘 */
+    --bg:      #ebe6dd; /* 復古米黃報紙底色 */
+    --panel:   #f5eedf; /* 稍微亮一點的報紙底色 */
+    --border:  #2b2925; /* 碳黑/鐵膽墨水邊框 */
+    --cyan:    #22384a; /* 普魯士藍墨水 (X用) */
+    --orange:  #8c2d2d; /* 戰時郵局紅墨水 (O用) */
+    --green:   #3b5a34; /* 戰略橄欖綠 (高光) */
+    --warning: #b37426; /* 塌縮警告赭石色 */
+    --muted:   #595449; /* 褪色碳黑文字 */
+    --text:    #1c1b18; /* 經典打字機墨黑 text */
+    --x-col:   #22384a; /* X 普魯士藍 */
+    --o-col:   #8c2d2d; /* O 郵局紅 */
+    --highlight: #e0d9cc; /* 選中微光 */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    background-image: linear-gradient(rgba(245, 247, 244, 0.7), rgba(245, 247, 244, 0.85)), url('/menu-img.png');
+    background-image: linear-gradient(rgba(235, 230, 221, 0.4), rgba(235, 230, 221, 0.55)), url('/vintage_paper_texture.png');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
     color: var(--text);
-    font-family: 'Nunito', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    font-family: 'Special Elite', 'Courier New', 'Courier', 'Microsoft JhengHei', sans-serif;
     height: 100vh;
     overflow: hidden;
     display: flex;
@@ -58,58 +60,75 @@
     flex-direction: column;
     align-items: center;
     gap: 1.5vh;
+    width: 44vw;
   }
   #right-col {
     display: flex;
     flex-direction: column;
     gap: 2vh;
-    justify-content: space-between;
+    width: 22vw;
+    justify-content: flex-start;
   }
   .player-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
     background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 3vh 2vw;
-    width: 20vw;
-    min-width: 200px;
+    border: 2px solid var(--border);
+    outline: 1px solid var(--border);
+    outline-offset: 3px;
+    padding: 2.5vh 2vw;
+    width: 100%;
     text-align: center;
     transition: all 0.3s;
     height: fit-content;
-    box-shadow: 0 4px 16px rgba(44, 62, 50, 0.04);
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.15);
   }
   .player-panel.active {
     border-color: var(--x-col);
-    box-shadow: 0 8px 24px rgba(74, 124, 89, 0.15);
+    outline: 2px solid var(--x-col);
+    box-shadow: 4px 4px 0px var(--x-col);
     transform: translateY(-2px);
   }
   .player-panel.active-o {
     border-color: var(--o-col);
-    box-shadow: 0 8px 24px rgba(217, 124, 72, 0.15);
+    outline: 2px solid var(--o-col);
+    box-shadow: 4px 4px 0px var(--o-col);
     transform: translateY(-2px);
   }
   .player-panel h2 {
-    font-size: 4vh;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 3vh;
+    font-weight: bold;
     margin-bottom: 1vh;
+    text-transform: uppercase;
   }
   #panel-o h2 { color: var(--o-col); }
   #panel-x h2 { color: var(--x-col); }
   
   .timer {
-    font-size: 7vh;
+    font-family: 'Courier Prime', monospace;
+    font-size: 6vh;
     font-weight: 700;
-    margin: 3vh 0;
+    margin: 2vh 0;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -2px;
+    border: 1px dashed var(--border);
+    padding: 0.5vh 1.5vw;
+    background: rgba(0,0,0,0.02);
   }
   .victory-message {
     display: none;
+    font-family: 'Playfair Display', Georgia, serif;
     font-size: 2.5vh;
     font-weight: bold;
     color: var(--green);
     margin-top: 2vh;
-    line-height: 1.5;
+    line-height: 1.4;
+    border: 3px double var(--green);
+    padding: 1vh;
+    transform: rotate(-2deg);
+    text-transform: uppercase;
   }
   .victory-message.show {
     display: block;
@@ -120,41 +139,45 @@
     font-size: 3.5vh;
     font-weight: 800;
     color: var(--text);
+    font-family: 'Playfair Display', Georgia, serif;
   }
 
   /* ── Status bar ── */
   #status {
+    font-family: 'Special Elite', 'Courier New', monospace;
     background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5vh 3vw;
+    border: 2px solid var(--border);
+    border-left: 6px solid var(--border);
+    padding: 1.5vh 2vw;
     text-align: center;
-    font-size: 2vh;
-    min-width: 40vw;
+    font-size: 1.8vh;
+    width: 100%;
     line-height: 1.4;
+    box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.1);
   }
   #status .player-x { color: var(--x-col); font-weight: 700; }
   #status .player-o { color: var(--o-col); font-weight: 700; }
-  #status .hint     { color: var(--muted); font-size: 1.8vh; }
+  #status .hint     { color: var(--muted); font-size: 1.6vh; margin-top: 0.5vh; }
 
   /* ── Main 3×3 board ── */
   #board {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 6px;
+    gap: 4px;
     background: var(--border);
-    border: 6px solid var(--border);
-    border-radius: 12px;
+    border: 4px solid var(--border);
+    border-radius: 0px;
+    box-shadow: 5px 5px 0px rgba(0,0,0,0.15);
   }
 
   /* ── Big cell ── */
   .bigcell {
     background: var(--bg);
     border: none;
-    border-radius: 6px;
-    width: 20vh;
-    height: 20vh;
+    border-radius: 0px;
+    width: 18vh;
+    height: 18vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -163,13 +186,17 @@
     transition: background 0.2s, transform 0.2s;
   }
   .bigcell:hover:not(.classical):not(.no-hover) {
-    background: #EAECE8;
+    background: var(--highlight);
   }
   .bigcell.selected-first {
-    background: rgba(74, 124, 89, 0.08) !important;
+    background: rgba(34, 56, 74, 0.06) !important;
+    outline: 2px dashed var(--x-col);
+    outline-offset: -3px;
   }
   .bigcell.winning {
-    background: rgba(110, 191, 139, 0.2) !important;
+    background: rgba(59, 90, 52, 0.15) !important;
+    outline: 3px double var(--green);
+    outline-offset: -3px;
     animation: gentle-bounce 0.5s ease-out;
   }
   @keyframes gentle-bounce {
@@ -177,26 +204,36 @@
     50%      { transform: translateY(-4px); }
   }
 
-  /* ── Classical mark (fills whole big cell) ── */
+  /* ── Classical mark ── */
   .bigcell.classical {
     cursor: default;
   }
   .classical-mark {
-    font-size: 13vh;
+    font-size: 11vh;
     font-weight: 900;
     line-height: 0.9;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    font-family: 'Playfair Display', Georgia, serif;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.15);
     animation: pop-in .25s cubic-bezier(0.34,1.56,0.64,1);
+    transform: rotate(-3deg);
   }
   .classical-mark.x { color: var(--x-col); }
   .classical-mark.o { color: var(--o-col); }
-  .classical-mark sub { font-size: 3.5vh; font-weight: 600; opacity: 0.6; vertical-align: baseline; margin-top: 0.5vh; }
+  .classical-mark sub {
+    font-family: 'Courier Prime', monospace;
+    font-size: 3vh;
+    font-weight: 600;
+    opacity: 0.8;
+    vertical-align: baseline;
+    margin-top: 0.2vh;
+  }
   @keyframes pop-in {
-    from { transform: scale(0.2); opacity: 0; }
-    to   { transform: scale(1);   opacity: 1; }
+    from { transform: scale(0.2) rotate(15deg); opacity: 0; }
+    to   { transform: scale(1) rotate(-3deg);   opacity: 1; }
   }
 
   /* ── Quantum marks sub-grid (3×3 slots) ── */
@@ -206,43 +243,54 @@
     grid-template-rows: repeat(3, 1fr);
     width: 100%;
     height: 100%;
-    gap: 2px;
-    padding: 4px;
+    gap: 1px;
+    padding: 3px;
+    background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(43, 41, 37, 0.03) 3px, rgba(43, 41, 37, 0.03) 6px);
   }
   .q-slot {
-    background: rgba(44, 62, 50, 0.03);
-    border-radius: 6px;
+    background: rgba(43, 41, 37, 0.04);
+    border: 1px dashed rgba(43, 41, 37, 0.12);
+    border-radius: 0px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 4vh;
-    font-weight: 800;
+    font-size: 2.6vh;
+    font-weight: bold;
+    font-family: 'Courier Prime', monospace;
     line-height: 1;
     min-height: 0;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
   }
   .q-slot:hover:not(.x):not(.o) {
-    background: rgba(74, 124, 89, 0.08);
+    background: rgba(34, 56, 74, 0.08);
   }
   .q-slot.selected-slot {
-    background: rgba(74, 124, 89, 0.15) !important;
-    box-shadow: inset 0 0 0 2px var(--x-col);
+    background: rgba(34, 56, 74, 0.12) !important;
+    border: 1px solid var(--x-col) !important;
   }
   .q-slot.x { color: var(--x-col); }
   .q-slot.o { color: var(--o-col); }
-  .q-slot sub { font-size: 1.8vh; vertical-align: baseline; margin-left: 2px; align-self: flex-end; margin-bottom: 0.8vh; font-weight: 600; opacity: 0.7; }
+  .q-slot sub {
+    font-size: 1.4vh;
+    vertical-align: baseline;
+    margin-left: 1px;
+    align-self: flex-end;
+    margin-bottom: 0.3vh;
+    font-weight: bold;
+    opacity: 0.8;
+  }
 
   .q-slot.highlight-slot {
-    background: rgba(110, 191, 139, 0.2) !important;
-    box-shadow: inset 0 0 0 2px var(--green);
-    animation: pulse-green 1.5s infinite;
+    background: rgba(179, 116, 38, 0.18) !important;
+    border: 1.5px solid var(--warning) !important;
+    animation: pulse-warning 1.2s infinite;
     cursor: pointer !important;
   }
-  @keyframes pulse-green {
-    0% { transform: scale(1); box-shadow: inset 0 0 0 2px var(--green); }
-    50% { transform: scale(1.05); box-shadow: inset 0 0 0 3px var(--green); }
-    100% { transform: scale(1); box-shadow: inset 0 0 0 2px var(--green); }
+  @keyframes pulse-warning {
+    0% { transform: scale(1); box-shadow: inset 0 0 0 1px var(--warning); }
+    50% { transform: scale(1.06); box-shadow: inset 0 0 0 2px var(--warning); }
+    100% { transform: scale(1); box-shadow: inset 0 0 0 1px var(--warning); }
   }
 
   /* ── Collapse Mode Overrides ── */
@@ -252,10 +300,10 @@
   #board.collapse-mode .q-slot:not(.highlight-slot) {
     cursor: default;
     pointer-events: none;
-    opacity: 0.5;
+    opacity: 0.4;
   }
   #board.collapse-mode .q-slot:not(.highlight-slot):hover {
-    background: rgba(44, 62, 50, 0.03);
+    background: rgba(43, 41, 37, 0.04);
   }
 
   /* ── Playing Mode Block Sibling Slots ── */
@@ -264,7 +312,7 @@
     cursor: default;
   }
   .bigcell.selected-first .q-slot:not(.selected-slot):hover {
-    background: rgba(44, 62, 50, 0.03); /* 取消 hover 效果 */
+    background: rgba(43, 41, 37, 0.04);
   }
 
   /* ── Controls ── */
@@ -274,59 +322,90 @@
   }
   button {
     padding: 1.5vh 3vw;
-    border-radius: 8px;
-    border: 1px solid var(--border);
+    border-radius: 0px;
+    border: 2px solid var(--border);
     background: var(--panel);
     color: var(--text);
-    font-size: 2vh;
-    font-family: 'Nunito', sans-serif;
+    font-size: 1.8vh;
+    font-family: 'Special Elite', 'Courier New', monospace;
     font-weight: 700;
     cursor: pointer;
     transition: all .2s;
-    box-shadow: 0 2px 6px rgba(44, 62, 50, 0.05);
+    box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.15);
   }
   button:hover {
-    background: #EAECE8;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(44, 62, 50, 0.1);
+    background: var(--highlight);
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
   }
   button:active {
-    transform: translateY(1px);
-    box-shadow: 0 1px 4px rgba(44, 62, 50, 0.05);
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.1);
   }
+
   /* ── Rules summary ── */
   #rules {
     background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5vh 1.5vw;
+    border: 2px solid var(--border);
+    outline: 3px double var(--border);
+    outline-offset: -5px;
+    border-radius: 0px;
+    padding: 2vh 1.5vw;
     font-size: 1.4vh;
-    color: var(--muted);
+    color: var(--text);
+    font-family: 'Special Elite', 'Courier New', monospace;
     line-height: 1.6;
-    max-height: 45vh;
+    max-height: 40vh;
     overflow-y: auto;
     flex-shrink: 0;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.15);
+  }
+  #rules summary {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.8vh;
+    font-weight: bold;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5vh;
   }
   #rules strong { color: var(--text); }
   #rules .tag-x { color: var(--x-col); font-weight: 700; }
   #rules .tag-o { color: var(--o-col); font-weight: 700; }
+  .rule-line {
+    margin-top: 1vh;
+    border-bottom: 1px dashed rgba(43, 41, 37, 0.15);
+    padding-bottom: 0.8vh;
+  }
+  .rule-line:last-child {
+    border-bottom: none;
+  }
 
   /* ── History Box ── */
   #history-box {
     background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5vh 1.5vw;
+    border: 2px solid var(--border);
+    border-radius: 0px;
+    padding: 2vh 1.5vw;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.15);
+    font-family: 'Special Elite', 'Courier New', monospace;
+  }
+  #history-box h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 2vh;
+    font-weight: bold;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5vh;
+    margin-bottom: 0.5vh;
+    text-transform: uppercase;
   }
   #history-list {
     list-style: none;
     overflow-y: auto;
     font-size: 1.5vh;
-    color: var(--muted);
+    color: var(--text);
     line-height: 1.6;
     margin-top: 1vh;
     padding-right: 0.5vw;
@@ -334,49 +413,124 @@
   #history-list li {
     margin-bottom: 0.8vh;
     padding-bottom: 0.8vh;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px dashed rgba(43, 41, 37, 0.15);
   }
   #history-list li:last-child {
     border-bottom: none;
   }
 
   /* ── Scrollbar ── */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  #rules, #history-list, #lobby-list {
+    --scrollbar-thumb: var(--border);
+    --scrollbar-track: transparent;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
+  @supports not (scrollbar-color: auto) {
+    #rules::-webkit-scrollbar, #history-list::-webkit-scrollbar, #lobby-list::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    #rules::-webkit-scrollbar-thumb, #history-list::-webkit-scrollbar-thumb, #lobby-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+    }
+    #rules::-webkit-scrollbar-track, #history-list::-webkit-scrollbar-track, #lobby-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+  }
 
-  #main-menu {
+  /* ── Newspaper structure ── */
+  .newspaper-page {
+    background: var(--panel);
+    border: 2px solid var(--border);
+    outline: 6px double var(--border);
+    outline-offset: -8px;
+    padding: 4vh 4vw;
+    width: 95%;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 6px 6px 18px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .newspaper-header {
+    width: 100%;
+    text-align: center;
+    border-bottom: 4px double var(--border);
+    margin-bottom: 2vh;
+    padding-bottom: 1vh;
+  }
+  .header-top {
+    font-size: 1.4vh;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    font-family: 'Playfair Display', Georgia, serif;
+    color: var(--text);
+  }
+  .newspaper-title {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 4.8vh;
+    font-weight: 900;
+    line-height: 1.1;
+    margin: 0.8vh 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-top: 1.5px solid var(--border);
+    border-bottom: 1.5px solid var(--border);
+    padding: 0.5vh 0;
+  }
+  .header-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.4vh;
+    font-family: 'Courier Prime', monospace;
+    font-weight: bold;
+    padding-top: 0.4vh;
+  }
+
+  #main-menu, #lobby-menu {
     position: fixed; inset: 0;
-    background: rgba(245, 247, 244, 0.2);
-    backdrop-filter: blur(6px);
+    background-image: linear-gradient(rgba(235, 230, 221, 0.45), rgba(235, 230, 221, 0.6)), url('/vintage_paper_texture.png');
+    background-size: cover;
+    background-position: center;
     z-index: 100;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 30px;
+    gap: 3vh;
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.25);
   }
-  #main-menu h1 {
-    font-size: 4.5rem;
-    margin-bottom: 10px;
-    text-shadow: 0 4px 12px rgba(255,255,255,0.8);
-  }
-  #main-menu p {
-    font-size: 1.5rem;
-    color: var(--muted);
-  }
+  
   .menu-buttons {
     display: flex;
-    gap: 20px;
+    gap: 15px;
   }
   .menu-buttons button {
-    font-size: 1.3rem;
-    padding: 18px 50px;
-    border-radius: 12px;
+    font-size: 1.1rem;
+    padding: 12px 30px;
+    border-radius: 0px;
     background: var(--panel);
   }
   .menu-buttons button:hover {
-    background: #EAECE8;
+    background: var(--highlight);
+  }
+
+  /* ── Input Override ── */
+  input[type="text"] {
+    background: var(--panel) !important;
+    border: 2px solid var(--border) !important;
+    color: var(--text) !important;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    font-size: 1.1rem !important;
+    border-radius: 0px !important;
+    outline: none;
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1);
+  }
+  input[type="text"]::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
   }
 
   /* ── 觀戰 Banner ── */
@@ -384,14 +538,16 @@
     display: none;
     position: fixed;
     top: 0; left: 0; right: 0;
-    background: linear-gradient(90deg, #4A7C59, #6EBF8B);
+    background: var(--cyan);
     color: #fff;
     text-align: center;
     padding: 8px;
     font-size: 1.4vh;
     font-weight: 700;
+    font-family: 'Special Elite', monospace;
     letter-spacing: 0.05em;
     z-index: 500;
+    border-bottom: 2px solid var(--border);
   }
   #spectator-banner.show { display: block; }
   body.has-banner #layout { margin-top: 32px; }
@@ -434,13 +590,12 @@
     .bigcell { width: 29vw; height: 29vw; }
     .classical-mark { font-size: 19vw; }
     .q-slot { font-size: 2.8vw; }
-    .player-panel { width: 44vw; padding: 1.5vh 2vw; border-radius: 12px; }
-    .timer { font-size: 4.5vh; margin: 1vh 0; }
-    .player-panel h2 { font-size: 2.5vh; }
+    .player-panel { width: 44vw; padding: 1.5vh 2vw; }
+    .timer { font-size: 4vh; margin: 1vh 0; }
+    .player-panel h2 { font-size: 2.2vh; }
     #status { font-size: 1.6vh; padding: 1.2vh 2vw; }
-    .menu-buttons button { font-size: 1.1rem; padding: 14px 30px; }
-    #main-menu h1 { font-size: 2.2rem; text-align: center; line-height: 1.2; }
-    #main-menu p { font-size: 1.1rem; }
+    .menu-buttons button { font-size: 1.0rem; padding: 10px 20px; }
+    .newspaper-title { font-size: 3.8vh; }
     #left-col { display: none; } /* 手機隱藏規則和歷史，節省空間 */
     #btn-rules-toggle {
       display: flex !important;
@@ -449,10 +604,8 @@
       justify-content: center;
     }
     #lang-toggle { top: 8px; right: 8px; }
-    #lang-toggle button { padding: 6px 10px; font-size: 0.9rem; }
     #controls { flex-wrap: wrap; gap: 8px; }
     #controls button { font-size: 1.4vh; padding: 1vh 3vw; }
-    #room-info { font-size: 1.2vh !important; }
   }
 
   /* ── 小手機 (≤ 360px) ── */
@@ -460,7 +613,7 @@
     .bigcell { width: 28vw; height: 28vw; }
     .classical-mark { font-size: 18vw; }
     .q-slot { font-size: 2.5vw; }
-    .timer { font-size: 4vh; }
+    .timer { font-size: 3.5vh; }
   }
 
   /* ── 手機全屏棋盤優化 ── */
@@ -478,32 +631,63 @@
 <body>
 
 <div id="main-menu">
-  <h1>⚛ 量子圈圈叉叉</h1>
-  <p>請選擇遊戲模式</p>
-  <div class="menu-buttons" style="flex-direction: column; gap: 15px; align-items: center;">
-    <button id="btn-lobby" onclick="showLobby()" style="width: 100%;">🏠 玩家大廳</button>
-    <button id="btn-pvp" onclick="createRoom('pvp')" style="width: 100%;">➕ 建立對戰房間</button>
-    <button id="btn-pve" onclick="createRoom('pve')" style="width: 100%;">🤖 人機對戰 (O)</button>
-    <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%;">
-        <input type="text" id="join-room-id" placeholder="房間號碼" style="padding: 18px 20px; font-size: 1.3rem; border-radius:12px; border:1px solid var(--border); flex: 1; outline: none;">
-        <button onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
+  <div class="newspaper-page">
+    <div class="newspaper-header">
+      <div class="header-top">★ WAR EDITION ★ MINISTRY OF INFORMATION APPROVED ★</div>
+      <h1>量子圈圈叉叉</h1>
+      <div class="header-meta">
+        <span>No. 42,918</span>
+        <span class="dynamic-dateline">Wednesday, 20 May 1940</span>
+        <span>PRICE: THREE PENCE</span>
+      </div>
     </div>
-    <div style="display:flex; gap: 10px; margin-top: 5px; width: 100%;">
-        <input type="text" id="fb-input-menu" placeholder="💡 意見回饋 / Feedback..." style="padding: 18px 20px; font-size: 1.1rem; border-radius:12px; border:1px solid var(--border); flex: 2; outline: none;">
-        <button onclick="submitInlineFeedback('fb-input-menu', this)" style="flex: 1; background: var(--cyan); color: #fff; border:none;">送出</button>
+    
+    <div class="editorial-headline" style="font-family:'Playfair Display', Georgia, serif; font-size: 2.2vh; font-weight: bold; border-bottom: 2px solid var(--border); padding-bottom:1vh; width:100%; text-align:center; margin-bottom: 2vh; text-transform: uppercase;">
+      "Quantum Superposition Invades Tic-Tac-Toe Arena!"
+    </div>
+    
+    <p style="display: none;"></p>
+
+    <div class="menu-buttons" style="flex-direction: column; gap: 15px; align-items: center; width: 100%;">
+      <button id="btn-lobby" onclick="showLobby()" style="width: 100%;">🏠 玩家大廳</button>
+      <button id="btn-pvp" onclick="createRoom('pvp')" style="width: 100%;">➕ 建立對戰房間</button>
+      <button id="btn-pve" onclick="createRoom('pve')" style="width: 100%;">🤖 人機對戰 (O)</button>
+      <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%;">
+          <input type="text" id="join-room-id" placeholder="房間號碼" style="padding: 18px 20px; font-size: 1.3rem; border-radius:0px; border:2px solid var(--border); flex: 1; outline: none;">
+          <button onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
+      </div>
+      <div style="display:flex; gap: 10px; margin-top: 5px; width: 100%;">
+          <input type="text" id="fb-input-menu" placeholder="💡 意見回饋 / Feedback..." style="padding: 18px 20px; font-size: 1.1rem; border-radius:0px; border:2px solid var(--border); flex: 2; outline: none;">
+          <button onclick="submitInlineFeedback('fb-input-menu', this)" style="flex: 1; background: var(--cyan); color: #fff; border:2px solid var(--border);">送出</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="lobby-menu" style="display: none; position: fixed; inset: 0; background: rgba(245, 247, 244, 0.95); backdrop-filter: blur(8px); z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 30px;">
-  <h1 id="lobby-title" style="font-size: 3rem;">🏠 玩家大廳</h1>
-  <p id="lobby-subtitle" style="font-size: 1.3rem; color: var(--muted);">等待對戰的玩家</p>
-  <div id="lobby-list" style="display: flex; flex-direction: column; gap: 12px; width: 90%; max-width: 500px; max-height: 50vh; overflow-y: auto; padding: 20px; background: var(--panel); border-radius: 16px; border: 1px solid var(--border);">
-    <div style="text-align: center; color: var(--muted); padding: 20px;">載入中...</div>
-  </div>
-  <div style="display: flex; gap: 15px;">
-    <button id="btn-refresh" onclick="refreshLobby()" style="padding: 15px 30px; font-size: 1.2rem;">🔄 重新整理</button>
-    <button id="btn-back-lobby" onclick="closeLobby()" style="padding: 15px 30px; font-size: 1.2rem;">🔙 回選單</button>
+<div id="lobby-menu" style="display: none;">
+  <div class="newspaper-page">
+    <div class="newspaper-header">
+      <div class="header-top">★ BULLETIN DESPATCH ★ LATEST RECRUITS ★</div>
+      <h1 id="lobby-title">LOBBY DISPATCH</h1>
+      <div class="header-meta">
+        <span>ACTIVE OFFICERS</span>
+        <span class="dynamic-dateline">Wednesday, 20 May 1940</span>
+        <span>STAND BY</span>
+      </div>
+    </div>
+    
+    <p id="lobby-subtitle" style="font-size: 1.2rem; color: var(--muted); font-family: 'Special Elite', monospace; text-align: center; margin-bottom: 2vh; text-transform: uppercase;">
+      " awaiting deployment orders "
+    </p>
+    
+    <div id="lobby-list" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-height: 40vh; overflow-y: auto; padding: 15px; background: var(--bg); border: 2px solid var(--border); margin-bottom: 3vh;">
+      <div style="text-align: center; color: var(--muted); padding: 20px; font-family: 'Special Elite', monospace;">載入中...</div>
+    </div>
+    
+    <div style="display: flex; gap: 15px; width: 100%;">
+      <button id="btn-refresh" onclick="refreshLobby()" style="flex: 1; padding: 12px 0;">🔄 重新整理</button>
+      <button id="btn-back-lobby" onclick="closeLobby()" style="flex: 1; padding: 12px 0;">🔙 回選單</button>
+    </div>
   </div>
 </div>
 
@@ -519,7 +703,7 @@
       <div class="rule-line"><strong>2. 一個格子可以擠很多個記號</strong>：只要格子還沒「確定」最終是誰的，任何玩家都可以把新的記號畫進去。所以一個格子裡可能會同時出現好幾種不同的記號（例如同時有 X₁、O₂、X₃ 等），這在遊戲中代表了粒子可以有不斷增加的疊加狀態。</div>
       <div class="rule-line"><strong>3. 形成「閉環」就會引發「坍塌」（最核心的機制）</strong>：當雙方的記號在不同格子之間互相牽連，形成了一個封閉的迴圈（閉環）時，就會觸發「坍塌」現象。 例如：某個格子裡有 X₁ 和 O₆，另一個格子裡也有 X₁ 和 O₆，這樣這兩個格子就互相糾纏並繞成了一個圈。觸發坍塌時，由「沒有畫下引發閉環那一筆」的對手（另一位玩家），來決定記號最終出現在哪裡。</div>
       <div class="rule-line"><strong>4. 連環效應（從不確定變成確定）</strong>：當對手決定了引發閉環的那個記號（例如 O₆）具體要在哪個格子出現後，這顆棋子的狀態就「確定」了（就像薛丁格的貓打開盒子被觀測到一樣）。 既然 O₆ 確定在 A 格子，那它原本分身的另一個 O₆ 就會從 B 格子消失；而原本在 A 格子裡跟它搶位子的 X₁ 就必須被趕到另一個地方去。這會引發一連串的「連環效應」，把原本糾纏在一起、不確定的記號，全部變成確定的單一狀態。</div>
-      <div class="rule-line"><strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉和圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰的「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。</div>
+      <div class="rule-line"><strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉 and 圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰的「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。</div>
       <div class="rule-line"><span class="tag-x">X（叉）</span> 先手，<span class="tag-o">O（圈）</span> 後手。</div>
     </details>
     <div id="history-box">
@@ -530,7 +714,15 @@
 
   <!-- 中間 -->
   <div id="center-col">
-    <h1>⚛ 量子圈圈叉叉</h1>
+    <div class="newspaper-header" style="margin-bottom: 1.5vh; width: 100%;">
+      <div class="header-top">★ COLD WAR DEBATES / BATTLE REPORTS ★</div>
+      <h1>量子圈圈叉叉</h1>
+      <div class="header-meta" style="font-size: 1.2vh;">
+        <span>DAILY REPORTS</span>
+        <span class="dynamic-dateline">Wednesday, 20 May 1940</span>
+        <span>VOL. I NO. 1</span>
+      </div>
+    </div>
 
     <div id="status">
       <div style="font-size: 1.5vh; color: var(--muted); margin-bottom: 5px; font-weight: bold;" id="room-info"></div>
@@ -546,8 +738,8 @@
     </div>
 
     <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%; max-width: 40vw; min-width: 300px;">
-        <input type="text" id="fb-input-game" placeholder="💡 意見回饋 / Feedback..." style="padding: 10px 15px; font-size: 1rem; border-radius:8px; border:1px solid var(--border); flex: 1; outline: none;">
-        <button onclick="submitInlineFeedback('fb-input-game', this)" style="padding: 10px 15px; font-size: 1rem; background: var(--cyan); color: #fff; border:none; border-radius:8px; cursor:pointer;">送出</button>
+        <input type="text" id="fb-input-game" placeholder="💡 意見回饋 / Feedback..." style="padding: 10px 15px; font-size: 1rem; border-radius:0px; border:2px solid var(--border); flex: 1; outline: none;">
+        <button onclick="submitInlineFeedback('fb-input-game', this)" style="padding: 10px 15px; font-size: 1rem; background: var(--cyan); color: #fff; border:2px solid var(--border); box-shadow: 3px 3px 0 var(--border); cursor:pointer;">送出</button>
     </div>
   </div>
 
@@ -608,112 +800,112 @@ let playerRole = null; // 'X', 'O', 'Spectator'
 
 const i18n = {
   en: {
-    menu_title: "⚛ Quantum Tic-Tac-Toe",
+    menu_title: "The Daily Quantum",
     menu_subtitle: "Select Game Mode",
-    btn_lobby: "🏠 Player Lobby",
-    btn_pvp: "➕ Create Room",
-    btn_pve: "🤖 vs AI (O)",
-    lobby_title: "🏠 Player Lobby",
-    lobby_subtitle: "Players waiting for match",
-    lobby_loading: "Loading...",
-    lobby_empty: "No rooms available. Create one!",
-    lobby_error: "Failed to load. Try again later.",
-    lobby_room: "Room",
-    lobby_pvp: "PvP Battle",
-    lobby_pve: "PvE vs AI",
-    lobby_waiting: "Waiting...",
-    lobby_join: "Join ▶",
+    btn_lobby: "🏠 Base Lobby",
+    btn_pvp: "➕ Joint Command (PvP)",
+    btn_pve: "🤖 Tactical Drill (PvE)",
+    lobby_title: "LOBBY DISPATCH",
+    lobby_subtitle: "Waiting Recruits",
+    lobby_loading: "Loading Despatch...",
+    lobby_empty: "No commands active. Create a new command room!",
+    lobby_error: "Telegraph failure. Try again later.",
+    lobby_room: "Dispatch Room",
+    lobby_pvp: "PvP Engagement",
+    lobby_pve: "AI Simulation",
+    lobby_waiting: "Awaiting orders...",
+    lobby_join: "DEPLOY ▶",
     btn_refresh: "🔄 Refresh",
-    btn_back: "🔙 Back",
-    rules_title: "📖 Rules",
+    btn_back: "🔙 Return",
+    rules_title: "📖 Rules of Engagement",
     rule_1: "<strong>1. Draw Two Marks (Superposition):</strong> Each turn, you must place your mark in TWO different cells. This means your piece exists in both cells simultaneously in a superposition. Each move gets a subscript number (e.g., X₁, O₂). This sequence number is crucial for tie-breakers.",
     rule_2: "<strong>2. Multiple Marks in One Cell:</strong> Until a cell collapses, anyone can add marks to it. A single cell might contain X₁, O₂, and X₃ simultaneously, representing increasing superposition.",
     rule_3: "<strong>3. Cyclic Entanglement Causes Collapse (Core):</strong> When marks connect different cells in a closed loop, it triggers a \"Collapse\". The opponent (who didn't close the loop) gets to choose where the pieces finally settle.",
     rule_4: "<strong>4. Chain Reaction (Uncertain to Certain):</strong> Once the opponent locks a piece into a cell (like Schrödinger's cat), its entangled twin disappears from the other cell, forcing other overlapping pieces to shift. This chain reaction settles the loop into classical big marks.",
     rule_5: "<strong>5. Tie-Breaker:</strong> Collapses can cause both X and O to get 3-in-a-row simultaneously. In this case, look at the subscript numbers on the winning lines. The player whose line has the LOWER maximum number wins, as they completed their setup earlier!",
-    rule_6: "<span class='tag-x'>X</span> goes first, <span class='tag-o'>O</span> goes second.",
-    history_title: "📜 History",
-    center_title: "⚛ Quantum Tic-Tac-Toe",
-    status_loading: "Loading...",
-    waiting_opponent: "⏳ Waiting for opponent to join...",
-    btn_menu: "🔙 Main Menu",
-    btn_play_again: "🔄 Play Again",
-    o_title: "O",
-    x_title: "X",
+    rule_6: "<span class='tag-x'>X</span> (First) acts as Command, <span class='tag-o'>O</span> (Second) acts as Tactical.",
+    history_title: "📜 War Telegrams",
+    center_title: "THE QUANTUM FRONT",
+    status_loading: "Contacting Command...",
+    waiting_opponent: "⏳ Waiting for tactical reinforcements...",
+    btn_menu: "🔙 Return to Base",
+    btn_play_again: "🔄 Re-engage",
+    o_title: "O (Tactical)",
+    x_title: "X (Command)",
     victory_text: "🏆 Victory!",
-    turn_x: '<span class="player-x">X</span>\'s turn',
-    turn_o: '<span class="player-o">O</span>\'s turn',
-    prompt_place: " — Pick 2 cells to place a quantum mark",
-    first_move_hint: "Selected cell {c} slot {s}, pick a second cell",
-    move_count_hint: "Move count: {n}",
-    collapse_title: "⚡ Cyclic Entanglement!<br>{chooser} decides the collapse",
-    collapse_hint: "{maker} created a cycle. Click a blinking GREEN piece to lock it into that cell!",
-    game_over: "Game Over!",
-    win_lines: "Congratulations {winner}, 3 in a row!",
-    win_full: "Board full! {winner} wins by lower max subscript!",
-    win_timeout: "Opponent timed out!",
+    turn_x: '<span class="player-x">X (Command)</span>\'s turn',
+    turn_o: '<span class="player-o">O (Tactical)</span>\'s turn',
+    prompt_place: " — Pick 2 cells to deploy quantum markers",
+    first_move_hint: "Selected cell {c} slot {s}, select secondary cell",
+    move_count_hint: "Campaign moves: {n}",
+    collapse_title: "⚡ Cyclic Entanglement!<br>{chooser} dictates the collapse",
+    collapse_hint: "{maker} closed the cycle. Click a blinking GREEN marker to lock it into that sector!",
+    game_over: "Mission Concluded!",
+    win_lines: "Congratulations {winner}, line established!",
+    win_full: "Sectors filled! {winner} wins by lower max subscript!",
+    win_timeout: "Opponent abandoned post!",
     win_tie_breaker: "Simultaneous lines! {winner} wins by lower max subscript!",
-    draw: "🤝 Draw! Board is full!",
-    err_same_cell: "Two marks cannot be in the same big cell",
-    err_multiple_cycle: "Multiple entangled pieces here.\n👉 Click the specific blinking GREEN piece!",
-    err_not_cycle: "This piece is not in the cycle. 👉 Click a blinking GREEN piece!",
-    hist_place: "Move {m}: {p} placed on {c1} & {c2}",
-    hist_place_same: "Move {m}: {p} placed on {c1} (Auto)",
-    hist_collapse: "⚠️ {c} collapsed {p} into cell {cell}"
+    draw: "🤝 Standoff! All sectors occupied!",
+    err_same_cell: "Two markers cannot occupy the same sector",
+    err_multiple_cycle: "Multiple entangled pieces here.\n👉 Click the specific blinking GREEN marker!",
+    err_not_cycle: "This piece is not in the cycle. 👉 Click a blinking GREEN marker!",
+    hist_place: "Order {m}: {p} deployed on {c1} & {c2}",
+    hist_place_same: "Order {m}: {p} deployed on {c1} (Auto)",
+    hist_collapse: "⚠️ {c} collapsed {p} into sector {cell}"
   },
   zh: {
-    menu_title: "⚛ 量子圈圈叉叉",
-    menu_subtitle: "請選擇遊戲模式",
-    btn_lobby: "🏠 玩家大廳",
-    btn_pvp: "➕ 建立對戰房間",
-    btn_pve: "🤖 人機對戰 (O)",
-    lobby_title: "🏠 玩家大廳",
-    lobby_subtitle: "等待對戰的玩家",
-    lobby_loading: "載入中...",
-    lobby_empty: "目前沒有等待中的房間，你可以建立一個！",
-    lobby_error: "載入失敗，請稍後重試",
-    lobby_room: "房間",
-    lobby_pvp: "PvP 對戰",
-    lobby_pve: "PvE 人機",
-    lobby_waiting: "等待中...",
-    lobby_join: "加入 ▶",
+    menu_title: "量子每日電訊",
+    menu_subtitle: "戰時特報 • 請選擇部署戰略",
+    btn_lobby: "🏠 聯絡基地",
+    btn_pvp: "➕ 建立前方指揮部",
+    btn_pve: "🤖 戰術演練 (O)",
+    lobby_title: "戰線大廳",
+    lobby_subtitle: "待部署的指戰員",
+    lobby_loading: "電報接收中...",
+    lobby_empty: "目前無待命部隊。建立新的指揮部！",
+    lobby_error: "無線電中斷，請重試。",
+    lobby_room: "指揮部",
+    lobby_pvp: "雙人會戰",
+    lobby_pve: "模擬演習",
+    lobby_waiting: "等待部署中...",
+    lobby_join: "開赴前線 ▶",
     btn_refresh: "🔄 重新整理",
     btn_back: "🔙 回選單",
-    rules_title: "📖 遊戲規則",
+    rules_title: "📖 交戰守則",
     rule_1: "<strong>1. 每次要畫兩個記號，而且要寫上數字（量子疊加）</strong>：每次輪到你時，你必須在「兩個不同的格子」裡畫上你的記號（例如叉叉或圈圈）。這代表你的棋子同時存在於這兩個格子中，處於一種「不確定到底在哪裡」的疊加狀態。另外，每一步都必須標上代表順序的數字（下角標），例如第一步畫兩個 X₁，第二步對手畫兩個 O₂，以此類推。這個數字順序在最後判定勝負時非常重要。",
     rule_2: "<strong>2. 一個格子可以擠很多個記號</strong>：只要格子還沒「確定」最終是誰的，任何玩家都可以把新的記號畫進去。所以一個格子裡可能會同時出現好幾種不同的記號（例如同時有 X₁、O₂、X₃ 等），這在遊戲中代表了粒子可以有不斷增加的疊加狀態。",
     rule_3: "<strong>3. 形成「閉環」就會引發「坍塌」（最核心的機制）</strong>：當雙方的記號在不同格子之間互相牽連，形成了一個封閉的迴圈（閉環）時，就會觸發「坍塌」現象。 例如：某個格子裡有 X₁ 和 O₆，另一個格子裡也有 X₁ 和 O₆，這樣這兩個格子就互相糾纏並繞成了一個圈。觸發坍塌時，由「沒有畫下引發閉環那一筆」的對手（另一位玩家），來決定記號最終出現在哪裡。",
     rule_4: "<strong>4. 連環效應（從不確定變成確定）</strong>：當對手決定了引發閉環的那個記號（例如 O₆）具體要在哪個格子出現後，這顆棋子的狀態就「確定」了（就像薛丁格的貓打開盒子被觀測到一樣）。 既然 O₆ 確定在 A 格子，那它原本分身的另一個 O₆ 就會從 B 格子消失；而原本在 A 格子裡跟它搶位子的 X₁ 就必須被趕到另一個地方去。這會引發一連串的「連環效應」，把原本糾纏在一起、不確定的記號，全部變成確定的單一狀態。",
-    rule_5: "<strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉和圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰的「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。",
-    rule_6: "<span class='tag-x'>X（叉）</span> 先手，<span class='tag-o'>O（圈）</span> 後手。",
-    history_title: "📜 遊戲紀錄",
-    center_title: "⚛ 量子圈圈叉叉",
-    status_loading: "載入中...",
-    waiting_opponent: "⏳ 等待對手加入...",
-    btn_menu: "🔙 回主選單",
-    btn_play_again: "🔄 再來一場",
-    o_title: "O（圈）",
-    x_title: "X（叉）",
-    victory_text: "🏆 勝利！",
-    turn_x: '<span class="player-x">X（叉）</span> 的回合',
-    turn_o: '<span class="player-o">O（圈）</span> 的回合',
-    prompt_place: " — 請點兩個格子放置量子棋子",
+    rule_5: "<strong>5. 雙方同時連成一線怎麼辦？（勝負判定）</strong>：因為坍塌產生的連環效應，有時候會導致叉叉 and 圈圈「同時」都連成了三點一線。這時候就要看你們記號旁邊標的「數字」了！ 判定方式是：看雙方連成直線的那三個記號中，誰의「最大數字」比較小，誰就獲勝。數字越小代表這條線是越早佈局完成的，所以分數比較高。",
+    rule_6: "<span class='tag-x'>X（先手）</span> 代表前線指揮，<span class='tag-o'>O（後手）</span> 代表後方戰術。",
+    history_title: "📜 戰事日誌",
+    center_title: "量子前線",
+    status_loading: "正與總部聯繫...",
+    waiting_opponent: "⏳ 等待友軍增援...",
+    btn_menu: "🔙 撤回總部",
+    btn_play_again: "🔄 重新集結",
+    o_title: "O（戰術）",
+    x_title: "X（指揮）",
+    victory_text: "🏆 捷報！",
+    turn_x: '<span class="player-x">X（指揮）</span> 的回合',
+    turn_o: '<span class="player-o">O（戰術）</span> 的回合',
+    prompt_place: " — 請點兩個格子部署量子標記",
     first_move_hint: "已選格子 {c} 的小格 {s}，再選第二個格子",
-    move_count_hint: "移動次數：{n}",
+    move_count_hint: "戰役回合：{n}",
     collapse_title: "⚡ 循環糾纏！<br>{chooser} 決定塌縮方向",
     collapse_hint: "{maker} 製造了環，請直接點選發出綠色閃光的「小棋子」來決定它要留在哪個格子！",
-    game_over: "遊戲結束！",
-    win_lines: "恭喜 {winner} 連成三線！",
-    win_full: "棋盤已滿，{winner} 的最大下標較小！",
-    win_timeout: "對手超時！",
-    win_tie_breaker: "雙方同時連線，{winner} 的最大下標較小！",
-    draw: "🤝 平局！棋盤已滿！",
-    err_same_cell: "兩格不能在同一個大格子裡",
-    err_multiple_cycle: "一個格子內可能有多個糾纏棋子。\n👉 請直接點選「發出綠色閃光的小棋子」，指定要把它留在這個格子內！",
-    err_not_cycle: "這個棋子不在目前的糾纏環中，👉 請點選發出綠色閃光的小棋子！",
-    hist_place: "第 {m} 步：{p} 放於格子 {c1} 與 {c2}",
-    hist_place_same: "第 {m} 步：{p} 放置於 {c1}",
-    hist_collapse: "⚠️ {c} 選擇讓 {p} 塌縮至格子 {cell}"
+    game_over: "戰役結束！",
+    win_lines: "捷報！恭喜 {winner} 突破防線！",
+    win_full: "防區飽和！{winner} 的最大下標較小！",
+    win_timeout: "敵軍通信中斷！",
+    win_tie_breaker: "雙方同時突破防線，{winner} 的最大下標較小！",
+    draw: "🤝 對峙！所有防區已飽和！",
+    err_same_cell: "兩個標記不能部署在同一個格子",
+    err_multiple_cycle: "此格子內存在多個糾纏標記。\n👉 請直接點選「發出綠色閃光的小棋子」，指定要把它留在這個格子內！",
+    err_not_cycle: "此標記不在當前的糾纏環中，👉 請點選發出綠色閃光的小棋子！",
+    hist_place: "命令 {m}：{p} 部署於格子 {c1} 與 {c2}",
+    hist_place_same: "命令 {m}：{p} 自動部署於 {c1}",
+    hist_collapse: "⚠️ {c} 決定將 {p} 塌縮至格子 {cell}"
   }
 };
 
@@ -758,6 +950,28 @@ function updateUITexts() {
   document.querySelector('#panel-x h2').textContent = t('x_title');
   document.querySelectorAll('.victory-message').forEach(el => {
     if(!el.classList.contains('show')) el.innerHTML = t('victory_text');
+  });
+
+  updateDateline();
+}
+
+function updateDateline() {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const daysZh = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  const monthsZh = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+  
+  const now = new Date();
+  const dayName = currentLang === 'zh' ? daysZh[now.getDay()] : days[now.getDay()];
+  const monthName = currentLang === 'zh' ? monthsZh[now.getMonth()] : months[now.getMonth()];
+  const dateNum = now.getDate();
+  
+  const text = currentLang === 'zh' 
+    ? `1940年${now.getMonth() + 1}月${dateNum}日 ${dayName}`
+    : `${dayName}, ${dateNum} ${monthName} 1940`;
+    
+  document.querySelectorAll('.dynamic-dateline').forEach(el => {
+    el.textContent = text;
   });
 }
 
