@@ -59,6 +59,9 @@
     flex-direction: column;
     align-items: center;
     gap: 1.5vh;
+    border-left: 1px solid rgba(43, 41, 37, 0.35);
+    border-right: 1px solid rgba(43, 41, 37, 0.35);
+    padding: 0 2vw;
   }
   #right-col {
     display: flex;
@@ -72,26 +75,31 @@
     flex-direction: column;
     align-items: center;
     background-image: linear-gradient(rgba(245, 238, 223, 0.8), rgba(245, 238, 223, 0.95)), url('/vintage_paper_texture.png');
-    border: 2px solid var(--border);
+    border: 1px solid var(--border);
+    outline: 3px double var(--border);
+    outline-offset: -6px;
     padding: 3vh 2vw;
     width: 20vw;
     min-width: 200px;
     text-align: center;
     transition: all 0.3s;
     height: fit-content;
-    box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+    box-shadow: 3px 3px 0px rgba(43,41,37,0.25);
     position: relative;
+    mix-blend-mode: multiply;
   }
   
   /* Stamp design for active state */
   .player-panel.active {
     border-color: var(--x-col);
-    box-shadow: 0 0 0 3px var(--x-col);
+    outline-color: var(--x-col);
+    box-shadow: 0 0 0 2px var(--x-col);
     transform: rotate(-1.5deg);
   }
   .player-panel.active-o {
     border-color: var(--o-col);
-    box-shadow: 0 0 0 3px var(--o-col);
+    outline-color: var(--o-col);
+    box-shadow: 0 0 0 2px var(--o-col);
     transform: rotate(1.5deg);
   }
   
@@ -147,13 +155,16 @@
   /* ── Status bar ── */
   #status {
     background-image: linear-gradient(rgba(245, 238, 223, 0.8), rgba(245, 238, 223, 0.95)), url('/vintage_paper_texture.png');
-    border: 2px solid var(--border);
+    border: 1px solid var(--border);
+    outline: 3px double var(--border);
+    outline-offset: -5px;
     padding: 1.5vh 3vw;
     text-align: center;
     font-size: 2vh;
     min-width: 40vw;
     line-height: 1.4;
-    box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+    box-shadow: 3px 3px 0px rgba(43,41,37,0.25);
+    mix-blend-mode: multiply;
   }
   #status .player-x { color: var(--x-col); font-weight: 700; }
   #status .player-o { color: var(--o-col); font-weight: 700; }
@@ -166,8 +177,11 @@
     grid-template-rows: repeat(3, 1fr);
     gap: 8px;
     background: var(--border);
-    border: 8px solid var(--border);
-    box-shadow: 4px 4px 0px rgba(0,0,0,0.15);
+    border: 4px solid var(--border);
+    outline: 4px double var(--border);
+    outline-offset: 4px;
+    box-shadow: 6px 6px 0px rgba(43, 41, 37, 0.25);
+    margin: 15px;
   }
 
   /* ── Big cell ── */
@@ -202,21 +216,47 @@
   /* ── Classical mark (fills whole big cell) ── */
   .bigcell.classical {
     cursor: default;
+    background: var(--bg) !important;
   }
   .classical-mark {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-size: 13vh;
+    font-family: 'Special Elite', monospace;
+    font-size: 10vh;
     font-weight: 900;
-    line-height: 0.9;
+    line-height: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: 4px;
     animation: pop-in .25s cubic-bezier(0.34,1.56,0.64,1);
+    width: 82%;
+    height: 82%;
+    mix-blend-mode: multiply;
+    padding: 5px;
   }
-  .classical-mark.x { color: var(--x-col); }
-  .classical-mark.o { color: var(--o-col); }
-  .classical-mark sub { font-family: 'Courier Prime', monospace; font-size: 3.5vh; font-weight: 700; opacity: 0.8; vertical-align: baseline; margin-top: 0.5vh; }
+  .classical-mark.x {
+    color: var(--x-col);
+    border: 3px solid var(--x-col);
+    outline: 1.5px solid var(--x-col);
+    outline-offset: 3px;
+    transform: rotate(-2.5deg);
+  }
+  .classical-mark.o {
+    color: var(--o-col);
+    border: 3px solid var(--o-col);
+    outline: 1.5px solid var(--o-col);
+    outline-offset: 3px;
+    border-radius: 50%;
+    transform: rotate(3deg);
+  }
+  .classical-mark sub {
+    font-family: 'Courier Prime', monospace;
+    font-size: 2.8vh;
+    font-weight: 700;
+    opacity: 0.85;
+    vertical-align: sub;
+    margin-top: 1.8vh;
+  }
 
   /* ── Quantum marks sub-grid (3×3 slots) ── */
   .quantum-grid {
@@ -229,8 +269,8 @@
     padding: 6px;
   }
   .q-slot {
-    background: rgba(43, 41, 37, 0.06);
-    border: 1px dashed rgba(43, 41, 37, 0.2);
+    background: rgba(43, 41, 37, 0.04);
+    border: 1px dotted rgba(43, 41, 37, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -248,13 +288,30 @@
     background: rgba(34, 56, 74, 0.15) !important;
     border: 1.5px solid var(--x-col);
   }
-  .q-slot.x { color: var(--x-col); }
-  .q-slot.o { color: var(--o-col); }
-  .q-slot sub { font-family: 'Courier Prime', monospace; font-size: 1.8vh; vertical-align: baseline; margin-left: 2px; align-self: flex-end; margin-bottom: 0.8vh; font-weight: 700; opacity: 0.9; }
+  .q-slot.x {
+    color: var(--x-col);
+    font-family: 'Special Elite', monospace;
+    mix-blend-mode: multiply;
+  }
+  .q-slot.o {
+    color: var(--o-col);
+    font-family: 'Special Elite', monospace;
+    mix-blend-mode: multiply;
+  }
+  .q-slot sub {
+    font-family: 'Courier Prime', monospace;
+    font-size: 1.8vh;
+    vertical-align: baseline;
+    margin-left: 2px;
+    align-self: flex-end;
+    margin-bottom: 0.8vh;
+    font-weight: 700;
+    opacity: 0.9;
+  }
 
   .q-slot.highlight-slot {
-    background: rgba(59, 90, 52, 0.2) !important;
-    border: 2px solid var(--green);
+    background: rgba(59, 90, 52, 0.25) !important;
+    border: 2px dashed var(--green);
     animation: pulse-green 1.5s infinite;
     cursor: pointer !important;
   }
@@ -307,6 +364,8 @@
     background: #e2dacb;
     transform: translateY(-1px);
     box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+    outline: 1px solid var(--border);
+    outline-offset: -4px;
   }
   button:active {
     transform: translateY(1px);
@@ -316,7 +375,9 @@
   /* ── Rules summary ── */
   #rules {
     background-image: linear-gradient(rgba(245, 238, 223, 0.9), rgba(245, 238, 223, 0.95)), url('/vintage_paper_texture.png');
-    border: 2px solid var(--border);
+    border: 1px solid var(--border);
+    outline: 3px double var(--border);
+    outline-offset: -5px;
     padding: 1.5vh 1.5vw;
     font-size: 1.5vh;
     color: var(--muted);
@@ -324,7 +385,8 @@
     max-height: 45vh;
     overflow-y: auto;
     flex-shrink: 0;
-    box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+    box-shadow: 3px 3px 0px rgba(43,41,37,0.25);
+    mix-blend-mode: multiply;
   }
   #rules summary {
     font-family: 'Playfair Display', Georgia, serif;
@@ -341,13 +403,16 @@
   /* ── History Box ── */
   #history-box {
     background-image: linear-gradient(rgba(245, 238, 223, 0.9), rgba(245, 238, 223, 0.95)), url('/vintage_paper_texture.png');
-    border: 2px solid var(--border);
+    border: 1px solid var(--border);
+    outline: 3px double var(--border);
+    outline-offset: -5px;
     padding: 1.5vh 1.5vw;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+    box-shadow: 3px 3px 0px rgba(43,41,37,0.25);
+    mix-blend-mode: multiply;
   }
   #history-box h3 {
     font-family: 'Playfair Display', Georgia, serif;
@@ -469,7 +534,7 @@
       align-items: center;
       gap: 3vh;
     }
-    #center-col { order: 1; width: 95vw; }
+    #center-col { order: 1; width: 95vw; border-left: none; border-right: none; padding: 0; }
     #right-col {
       order: 2;
       flex-direction: row;
@@ -491,7 +556,7 @@
   @media (max-width: 480px) {
     body { padding: 2vh 0 6vh; }
     #center-col h1 { font-size: 2.4vh; }
-    #board { gap: 4px; border-width: 4px; }
+    #board { gap: 4px; border-width: 2px; outline-width: 2px; outline-offset: 2px; margin: 10px; }
     .bigcell { width: 29vw; height: 29vw; }
     .classical-mark { font-size: 19vw; }
     .q-slot { font-size: 2.8vw; }
