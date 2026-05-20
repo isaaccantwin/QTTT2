@@ -1492,7 +1492,8 @@ async function enterGame(initialState) {
     document.getElementById('layout').style.display = 'flex';
 
     const mode = initialState.mode || gameMode;
-    document.getElementById('btn-disband').style.display = (mode === 'pvp') ? 'inline-block' : 'none';
+    const isCreator = (initialState.creator_client_id === clientId);
+    document.getElementById('btn-disband').style.display = (mode === 'pvp' && isCreator) ? 'inline-block' : 'none';
 
     // Room info + role badge
     const roleEmoji = playerRole === 'Spectator' ? '👁' : playerRole === 'X' ? '❌' : '⭕';
@@ -1673,7 +1674,11 @@ document.getElementById('btn-disband').addEventListener('click', async () => {
   if (!confirm(confirmMsg)) return;
 
   if (roomId) {
-    await api('/api/disband_room/' + roomId, {});
+    const res = await api('/api/disband_room/' + roomId, {});
+    if (res.error) {
+      alert(res.error);
+      return;
+    }
   }
   showMenu();
 });

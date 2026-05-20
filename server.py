@@ -85,10 +85,18 @@ def leave_room(room_id: str, body: LeaveBody):
             rooms[room_id] = r
     return JSONResponse({"ok": True})
 
+class DisbandRoomBody(BaseModel):
+    client_id: str
+
 @app.post("/api/disband_room/{room_id}")
-def disband_room_api(room_id: str):
-    delete_room(room_id)
-    return JSONResponse({"ok": True})
+def disband_room_api(room_id: str, body: DisbandRoomBody):
+    r = load_room(room_id)
+    if r is None:
+        return JSONResponse({"ok": True})
+    if getattr(r, 'creator', None) == body.client_id:
+        delete_room(room_id)
+        return JSONResponse({"ok": True})
+    return JSONResponse({"error": "只有創建房間的玩家才能解散房間"}, status_code=403)
 
 import threading
 import urllib.request
@@ -146,6 +154,7 @@ class RoomState:
         self.mode = mode
         self.x = None
         self.o = None
+        self.creator = None
         # Clean timer: each player has a pool of remaining seconds
         self.x_time_remaining = 60.0
         self.o_time_remaining = 60.0
@@ -215,6 +224,7 @@ class RoomState:
         st["has_o"] = self.o is not None
         st["x_client_id"] = self.x
         st["o_client_id"] = self.o
+        st["creator_client_id"] = self.creator
         return st
 
 
@@ -227,6 +237,7 @@ def save_room(room_id: str, r: RoomState):
             "mode": r.mode,
             "x": r.x,
             "o": r.o,
+            "creator": r.creator,
             "x_time_remaining": r.x_time_remaining,
             "o_time_remaining": r.o_time_remaining,
             "turn_start_time": r.turn_start_time,
@@ -245,6 +256,7 @@ def load_room(room_id: str) -> RoomState | None:
             r.game.restore_state(d["game"])
             r.x = d["x"]
             r.o = d["o"]
+            r.creator = d.get("creator")
             r.x_time_remaining = d["x_time_remaining"]
             r.o_time_remaining = d["o_time_remaining"]
             r.turn_start_time = d["turn_start_time"]
@@ -300,6 +312,7 @@ def create_room(body: CreateRoomBody):
     while load_room(room_id) is not None:
         room_id = str(random.randint(1000, 9999))
     r = RoomState(body.mode)
+    r.creator = body.client_id
     if body.mode == "pve":
         r.o = body.client_id
         role = "O"
