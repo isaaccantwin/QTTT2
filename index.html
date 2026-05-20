@@ -1122,7 +1122,7 @@ async function takeSeat(role) {
         return;
     }
     playerRole = res.role;
-    if (res.state) render(res.state, true);
+    if (res.state) enterGame(res.state);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1529,7 +1529,8 @@ async function pollState() {
         syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
     }
     // Only full re-render when something actually changed
-    if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady) {
+    const seatChanged = state && (res.has_x !== state.has_x || res.has_o !== state.has_o);
+    if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady || seatChanged) {
         prevPlayersReady = res.players_ready;
         render(res, true);
         // Only trigger AI from poll if move count advanced (not just a status flip we already handled)
