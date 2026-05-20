@@ -660,13 +660,13 @@
       <h2>O（圈）</h2>
       <div class="timer" id="timer-o">--</div>
       <div class="victory-message" id="victory-o">🏆 勝利！</div>
-      <button id="btn-seat-o" class="btn-seat" onclick="takeSeat('O')" style="display:none; margin-top: 10px; padding: 5px 10px; background: var(--pink); color: #fff; border:none; border-radius: 4px; cursor: pointer;">入座 O</button>
+      <button id="btn-seat-o" class="btn-seat" onclick="takeSeat('O')" style="display:none; margin: 15px auto 0 auto; width: 80%; padding: 15px 10px; font-size: 1.5rem; font-weight: 700; background: var(--pink); color: #fff; border: 3px solid var(--border); border-radius: 8px; cursor: pointer; box-shadow: 2px 2px 0px rgba(0,0,0,0.2); transition: transform 0.1s;">入座 O</button>
     </div>
     <div id="panel-x" class="player-panel">
       <h2>X（叉）</h2>
       <div class="timer" id="timer-x">--</div>
       <div class="victory-message" id="victory-x">🏆 勝利！</div>
-      <button id="btn-seat-x" class="btn-seat" onclick="takeSeat('X')" style="display:none; margin-top: 10px; padding: 5px 10px; background: var(--cyan); color: #fff; border:none; border-radius: 4px; cursor: pointer;">入座 X</button>
+      <button id="btn-seat-x" class="btn-seat" onclick="takeSeat('X')" style="display:none; margin: 15px auto 0 auto; width: 80%; padding: 15px 10px; font-size: 1.5rem; font-weight: 700; background: var(--cyan); color: #fff; border: 3px solid var(--border); border-radius: 8px; cursor: pointer; box-shadow: 2px 2px 0px rgba(0,0,0,0.2); transition: transform 0.1s;">入座 X</button>
     </div>
   </div>
 </div>
@@ -1135,16 +1135,23 @@ function render(s_state, isFresh = false) {
   prevStatus = state.status;
   prevMoveCount = state.move_count;
 
-  // Handle seat buttons
+  // Handle seat buttons and timers
   const btnX = document.getElementById('btn-seat-x');
   const btnO = document.getElementById('btn-seat-o');
+  const timerX = document.getElementById('timer-x');
+  const timerO = document.getElementById('timer-o');
   
   if (state.status === 'playing' || state.status === 'collapse' || !state.players_ready) {
-      btnX.style.display = (!state.has_x && playerRole === 'Spectator') ? 'inline-block' : 'none';
-      btnO.style.display = (!state.has_o && playerRole === 'Spectator') ? 'inline-block' : 'none';
+      btnX.style.display = (!state.has_x && playerRole === 'Spectator') ? 'block' : 'none';
+      btnO.style.display = (!state.has_o && playerRole === 'Spectator') ? 'block' : 'none';
+      
+      timerX.style.display = (!state.has_x) ? 'none' : 'block';
+      timerO.style.display = (!state.has_o) ? 'none' : 'block';
   } else {
       btnX.style.display = 'none';
       btnO.style.display = 'none';
+      timerX.style.display = 'block';
+      timerO.style.display = 'block';
   }
 
   if (prevStatus === 'playing' && state.status === 'collapse') {
