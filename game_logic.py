@@ -77,6 +77,27 @@ class QuantumGame:
                 p = QuantumPiece(self.move_count, self.current_player, c1, s1, c1, s2)
                 self.pieces[p.id] = p
                 self.classical[c1] = p
+
+                # Clean up any remaining quantum pieces in this now-classical cell.
+                # Each must cascade to its partner cell.
+                remaining = list(self.quantum.get(c1, []))
+                for qp in remaining:
+                    if qp.id in self.pieces:
+                        # Remove from both cells' quantum/adj lists
+                        for cc in (qp.c1, qp.c2):
+                            if qp in self.adj.get(cc, []):
+                                self.adj[cc].remove(qp)
+                            if qp in self.quantum.get(cc, []):
+                                self.quantum[cc].remove(qp)
+                        # Place classically in the partner cell (if not already occupied)
+                        other_cell = qp.other(c1)
+                        if other_cell not in self.classical:
+                            self.classical[other_cell] = qp
+                        self.pieces.pop(qp.id, None)
+                # Ensure the now-classical cell has empty quantum/adj lists
+                self.quantum[c1] = []
+                self.adj[c1] = []
+
                 self.history.append({
                     "type": "place_classical",
                     "move": self.move_count,

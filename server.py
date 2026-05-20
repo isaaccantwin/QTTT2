@@ -355,6 +355,8 @@ def place(room_id: str, body: PlaceBody):
         if expected != body.client_id:
             return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
     elif r.mode == "pve":
+        if r.game.status != GameStatus.PLAYING:
+            return JSONResponse({"error": "目前不是放棋階段"}, status_code=403)
         if r.game.current_player != "O":
             return JSONResponse({"error": "等待 AI 思考中..."}, status_code=403)
         if r.o != body.client_id:
@@ -388,7 +390,9 @@ def resolve(room_id: str, body: ResolveBody):
                 return JSONResponse({"error": "不是你的回合或是觀戰者"}, status_code=403)
     elif r.mode == "pve":
         cp = r.game.pending.get("choosing_player") if r.game.pending else None
-        if cp == "O" and r.o != body.client_id:
+        if cp != "O":
+            return JSONResponse({"error": "目前由 AI 決定塌縮方向"}, status_code=403)
+        if r.o != body.client_id:
             return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
@@ -459,6 +463,9 @@ def ai_move(room_id: str, body: AIMoveBody):
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     game = r.game
 
+    # In PvE, human is always "O"
+    human_role = "O"
+
     if game.status == GameStatus.PLAYING:
         valid_spots = []
         for i in range(9):
@@ -478,24 +485,29 @@ def ai_move(room_id: str, body: AIMoveBody):
                 c2s2 = random.choice([x for x in valid_spots if x != c1s1])
                 game.place(c1s1[0], c1s1[1], c1s1[0], c2s2[1])
 
-        # Check if place() caused a collapse
+        # After AI places: if collapse triggered, check who should choose
         if game.status == GameStatus.COLLAPSE:
             pd = game.pending
+            if pd and pd.get("choosing_player") != human_role:
+                # AI must choose the collapse direction → auto-resolve
+                cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
+                pid = random.choice(cycle_pieces)
+                if pid in game.pieces:
+                    piece = game.pieces[pid]
+                    chosen_cell = random.choice([piece.c1, piece.c2])
+                    game.resolve(pid, chosen_cell)
+            # else: human chooses → leave COLLAPSE state for frontend
+
+    elif game.status == GameStatus.COLLAPSE:
+        # Game was already in COLLAPSE — only resolve if AI is the chooser
+        pd = game.pending
+        if pd and pd.get("choosing_player") != human_role:
             cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
             pid = random.choice(cycle_pieces)
             if pid in game.pieces:
                 piece = game.pieces[pid]
                 chosen_cell = random.choice([piece.c1, piece.c2])
                 game.resolve(pid, chosen_cell)
-
-    elif game.status == GameStatus.COLLAPSE:
-        pd = game.pending
-        cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
-        pid = random.choice(cycle_pieces)
-        if pid in game.pieces:
-            piece = game.pieces[pid]
-            chosen_cell = random.choice([piece.c1, piece.c2])
-            game.resolve(pid, chosen_cell)
 
     if USE_REDIS:
         save_room(room_id, r)

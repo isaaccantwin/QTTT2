@@ -1410,7 +1410,7 @@ async function pollState() {
         prevPlayersReady = res.players_ready;
         render(res);
         // Only trigger AI from poll if move count advanced (not just a status flip we already handled)
-        if (res.move_count > prevMoveCount) await maybeDoAIMove(res);
+        await maybeDoAIMove(res);
     }
 }
 
