@@ -344,6 +344,14 @@
     display: flex;
     gap: 12px;
   }
+  #btn-disband {
+    border-color: #d9534f !important;
+    color: #d9534f !important;
+  }
+  #btn-disband:hover {
+    background: #f9ebea !important;
+    border-color: #c9302c !important;
+  }
   button {
     padding: 1.5vh 3vw;
     border: 2px solid var(--border);
@@ -646,6 +654,7 @@
     <div id="controls">
       <button id="btn-play-again">🔄 再來一場</button>
       <button id="btn-menu">🔙 回主選單</button>
+      <button id="btn-disband">💥 解散房間</button>
     </div>
 
     <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%; max-width: 40vw; min-width: 300px;">
@@ -767,7 +776,8 @@ const i18n = {
     hist_collapse: "⚠️ {c} collapsed {p} into cell {cell}",
     take_seat_x: "Sit as X",
     take_seat_o: "Sit as O",
-    waiting_seat: "Waiting for players to take seats..."
+    waiting_seat: "Waiting for players to take seats...",
+    btn_disband: "💥 Disband Room"
   },
   zh: {
     menu_title: "⚛ 量子圈圈叉叉",
@@ -824,7 +834,8 @@ const i18n = {
     hist_collapse: "⚠️ {c} 選擇讓 {p} 塌縮至格子 {cell}",
     take_seat_x: "入座 X",
     take_seat_o: "入座 O",
-    waiting_seat: "等待雙方入座..."
+    waiting_seat: "等待雙方入座...",
+    btn_disband: "💥 解散房間"
   }
 };
 
@@ -867,6 +878,7 @@ function updateUITexts() {
   document.querySelector('#center-col h1').innerHTML = t('center_title');
   document.querySelector('#btn-menu').textContent = t('btn_menu');
   document.querySelector('#btn-play-again').textContent = t('btn_play_again');
+  document.querySelector('#btn-disband').textContent = t('btn_disband');
   document.querySelector('#panel-o h2').textContent = t('o_title');
   document.querySelector('#panel-x h2').textContent = t('x_title');
   document.querySelectorAll('.victory-message').forEach(el => {
@@ -1479,6 +1491,9 @@ async function enterGame(initialState) {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('layout').style.display = 'flex';
 
+    const mode = initialState.mode || gameMode;
+    document.getElementById('btn-disband').style.display = (mode === 'pvp') ? 'inline-block' : 'none';
+
     // Room info + role badge
     const roleEmoji = playerRole === 'Spectator' ? '👁' : playerRole === 'X' ? '❌' : '⭕';
     const roleName  = playerRole === 'Spectator' ? (currentLang === 'zh' ? '觀戰' : 'Spectator') : playerRole;
@@ -1513,7 +1528,9 @@ async function pollState() {
     console.log('pollState response:', res);
     if (res.error) {
         if (res.error === '找不到該房間' || res.error === 'Room not found') {
-            alert(currentLang === 'zh' ? '房間已遺失 (伺服器可能已重啟)，請重新建立房間。' : 'Room lost (server may have restarted). Please recreate room.');
+            alert(currentLang === 'zh'
+              ? '房間已關閉（已解散或因無人活動超時），將返回主選單。'
+              : 'Room closed (disbanded or timed out due to inactivity). Returning to main menu.');
             roomId = null;
             state = null;
             showMenu();
@@ -1626,9 +1643,7 @@ async function joinRoom() {
   enterGame(res.state);
 }
 
-document.getElementById('btn-menu').addEventListener('click', () => {
-  playSound('click');
-  if (roomId) api('/api/leave/' + roomId, {});
+function showMenu() {
   document.getElementById('main-menu').style.display = 'flex';
   document.getElementById('layout').style.display = 'none';
   document.getElementById('spectator-banner').classList.remove('show');
@@ -1642,6 +1657,25 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   firstMove = null;
   roomId = null;
   playerRole = null;
+}
+
+document.getElementById('btn-menu').addEventListener('click', () => {
+  playSound('click');
+  if (roomId) api('/api/leave/' + roomId, {});
+  showMenu();
+});
+
+document.getElementById('btn-disband').addEventListener('click', async () => {
+  playSound('click');
+  const confirmMsg = currentLang === 'zh'
+    ? '確定要解散房間嗎？這會立即結束所有玩家與觀戰者的對戰！'
+    : 'Are you sure you want to disband the room? This will immediately end the match for all players and spectators!';
+  if (!confirm(confirmMsg)) return;
+
+  if (roomId) {
+    await api('/api/disband_room/' + roomId, {});
+  }
+  showMenu();
 });
 
 document.getElementById('btn-play-again').addEventListener('click', () => {

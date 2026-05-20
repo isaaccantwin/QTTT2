@@ -85,6 +85,11 @@ def leave_room(room_id: str, body: LeaveBody):
             rooms[room_id] = r
     return JSONResponse({"ok": True})
 
+@app.post("/api/disband_room/{room_id}")
+def disband_room_api(room_id: str):
+    delete_room(room_id)
+    return JSONResponse({"ok": True})
+
 import threading
 import urllib.request
 
