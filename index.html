@@ -832,7 +832,7 @@ function toggleLang() {
   currentLang = currentLang === 'zh' ? 'en' : 'zh';
   updateUITexts();
   playSound('click');
-  if (state) render(state);
+  if (state) render(state, true);
 }
 
 function updateUITexts() {
@@ -988,7 +988,7 @@ function startLocalTimer() {
       clearInterval(timerInterval);
       timerInterval = null;
       const res = await api('/api/timeout/' + roomId, {});
-      if (res.state) render(res.state);
+      if (res.state) render(res.state, true);
     }
   }, 100); // 100 ms — smooth display, no drift
 }
@@ -998,7 +998,7 @@ function stopLocalTimer() {
   timerInterval = null;
 }
 
-function manageTurnTimer(s) {
+function manageTurnTimer(s, isFresh = false) {
     let activePlayer = null;
     if (s.status === 'playing') {
         activePlayer = s.current_player;
@@ -1024,8 +1024,8 @@ function manageTurnTimer(s) {
     }
 
     // Only sync timer from authoritative server state,
-    // skip during optimistic renders (pendingRequest=true) to avoid jitter
-    if (!pendingRequest) {
+    // skip during optimistic renders or stale UI redraws to avoid jitter
+    if (!pendingRequest && isFresh) {
         syncTimerFromServer(s.x_time_left, s.o_time_left, activePlayer);
     }
     updateTimerDisplay();
@@ -1055,7 +1055,7 @@ async function maybeDoAIMove(s) {
     try {
         const res = await api('/api/ai_move/' + roomId, { client_id: clientId });
         if (res.state) {
-            render(res.state);
+            render(res.state, true);
             nextState = res.state;
         }
     } finally {
@@ -1107,7 +1107,7 @@ function initBoard() {
 // ─────────────────────────────────────────────────────────────────────────────
 // 渲染
 // ─────────────────────────────────────────────────────────────────────────────
-function render(s_state) {
+function render(s_state, isFresh = false) {
   state = s_state;
   if (state.mode) gameMode = state.mode;
 
@@ -1128,7 +1128,7 @@ function render(s_state) {
       document.getElementById('victory-o').classList.remove('show');
       document.getElementById('victory-x').classList.remove('show');
   }
-  manageTurnTimer(state);
+  manageTurnTimer(state, isFresh);
 
   const statusMain = document.getElementById('status-main');
   const statusHint = document.getElementById('status-hint');
@@ -1284,7 +1284,7 @@ async function onSlotClick(c, s) {
     const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
     document.getElementById('board').style.opacity = '';
     pendingRequest = false;
-    if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
+    if (res.state) { render(res.state, true); await maybeDoAIMove(res.state); }
     return;
   }
 
@@ -1311,7 +1311,7 @@ async function onSlotClick(c, s) {
         pendingRequest = true;
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
         pendingRequest = false;
-        if (res.state) { render(res.state); await maybeDoAIMove(res.state); }
+        if (res.state) { render(res.state, true); await maybeDoAIMove(res.state); }
         return;
     }
 
@@ -1344,15 +1344,15 @@ async function onSlotClick(c, s) {
     if (res.error) {
         alert(res.error);
         // Revert optimistic state by re-rendering true server state if available, or just waiting for pollState
-        if (res.state) render(res.state);
+        if (res.state) render(res.state, true);
         else {
             isAITurn = false; // Release lock so pollState can recover
             // We can manually fetch state to recover
             const recovery = await api('/api/state/' + roomId);
-            if (recovery.status) render(recovery);
+            if (recovery.status) render(recovery, true);
         }
     } else if (res.state) {
-        render(res.state); 
+        render(res.state, true); 
         await maybeDoAIMove(res.state); 
     }
   }
@@ -1453,7 +1453,7 @@ async function enterGame(initialState) {
     aiRunning = false;
     console.log('enterGame state:', JSON.stringify(initialState));
     document.getElementById('room-info').textContent += ` | status: ${initialState.status}, ready: ${initialState.players_ready}, move: ${initialState.move_count}`;
-    render(initialState);
+    render(initialState, true);
     if (pollInterval) clearInterval(pollInterval);
     // Spectators poll more frequently since they have no optimistic UI
     const pollMs = playerRole === 'Spectator' ? 1500 : 2000;
@@ -1487,7 +1487,7 @@ async function pollState() {
     // Only full re-render when something actually changed
     if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady) {
         prevPlayersReady = res.players_ready;
-        render(res);
+        render(res, true);
         // Only trigger AI from poll if move count advanced (not just a status flip we already handled)
         await maybeDoAIMove(res);
     }
