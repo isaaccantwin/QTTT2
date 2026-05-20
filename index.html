@@ -1328,7 +1328,7 @@ async function onSlotClick(c, s) {
   if (state.status === 'collapse') {
     if (playerRole === 'Spectator') return;
     const pd = state.pending;
-    if (gameMode === 'pvp' && playerRole !== pd.choosing_player) return;
+    if (playerRole !== pd.choosing_player) return;
     const mark = state.cells[c].quantum[s];
     if (!mark || !pd.cycle_pieces || !pd.cycle_pieces.includes(mark.id)) return;
 
@@ -1340,13 +1340,19 @@ async function onSlotClick(c, s) {
     const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
     document.getElementById('board').style.opacity = '';
     pendingRequest = false;
-    if (res.state) { render(res.state, true); await maybeDoAIMove(res.state); }
+    if (res.error) {
+        alert(res.error);
+        if (res.state) render(res.state, true);
+    } else if (res.state) {
+        render(res.state, true); 
+        await maybeDoAIMove(res.state); 
+    }
     return;
   }
 
   // ── Playing mode ───────────────────────────────────────────────────────────
   if (state.status !== 'playing' || playerRole === 'Spectator' || !state.players_ready) return;
-  if (gameMode === 'pvp' && playerRole !== state.current_player) return;
+  if (playerRole !== state.current_player) return;
   const cell = state.cells[c];
   if (cell.type === 'classical') return;
   if (cell.quantum[s]) return;
@@ -1548,12 +1554,13 @@ async function pollState() {
     }
     // Only full re-render when something actually changed
     const seatChanged = state && (res.has_x !== state.has_x || res.has_o !== state.has_o);
-    if (res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady || seatChanged) {
+    const stateChanged = res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady || seatChanged;
+    if (stateChanged) {
         prevPlayersReady = res.players_ready;
         render(res, true);
-        // Only trigger AI from poll if move count advanced (not just a status flip we already handled)
-        await maybeDoAIMove(res);
     }
+    // Proactively check if AI needs to move (helps recover if a previous request failed or lagged)
+    await maybeDoAIMove(res);
 }
 
 // startLocalTimer / stopLocalTimer are defined above near manageTurnTimer

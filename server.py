@@ -22,11 +22,11 @@ try:
     kv = redis.from_url(os.environ.get("KV_REST_API_URL"))
     kv.ping()
     USE_REDIS = True
-    print("✅ Redis connected")
+    print("[OK] Redis connected")
 except Exception as e:
     USE_REDIS = False
     redis_error = str(e)
-    print(f"❌ Redis not available: {e}")
+    print(f"[Error] Redis not available: {e}")
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
 
