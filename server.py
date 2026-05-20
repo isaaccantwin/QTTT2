@@ -227,7 +227,7 @@ def save_room(room_id: str, r: RoomState):
             "turn_start_time": r.turn_start_time,
             "last_active_player": r.last_active_player
         }
-        kv.set(f"room:{room_id}", json.dumps(data), ex=3600)
+        kv.set(f"room:{room_id}", json.dumps(data), ex=90)
 
 def load_room(room_id: str) -> RoomState | None:
     if USE_REDIS:
@@ -245,6 +245,13 @@ def load_room(room_id: str) -> RoomState | None:
             r.turn_start_time = d["turn_start_time"]
             r.last_active_player = d["last_active_player"]
             print(f"  loaded: x={r.x}, o={r.o}, move_count={r.game.move_count}")
+            return r
+    else:
+        r = rooms.get(room_id)
+        if r is not None:
+            if getattr(r, 'last_polled', time.time()) < time.time() - 90.0:
+                del rooms[room_id]
+                return None
             return r
     return None
 
@@ -327,6 +334,14 @@ def get_state(room_id: str):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    
+    r.last_polled = time.time()
+    if USE_REDIS:
+        try:
+            kv.expire(f"room:{room_id}", 90)
+        except Exception:
+            pass
+            
     return JSONResponse(r.get_state())
 
 class TakeSeatBody(BaseModel):
