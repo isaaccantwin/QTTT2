@@ -940,10 +940,24 @@ function formatTime(secs) {
 
 // Called whenever server gives us fresh time values (on poll or after move)
 function syncTimerFromServer(xLeft, oLeft, activePlayer) {
-  timerActivePlayer = activePlayer;
-  timerStartMs = Date.now();
-  timerXatStart = xLeft;
-  timerOatStart = oLeft;
+  // Only reset the countdown anchor if:
+  //   a) the active player actually changed, OR
+  //   b) the server's reported time drifts >1s from our local prediction
+  const playerChanged = activePlayer !== timerActivePlayer;
+  let driftTooLarge = false;
+  if (!playerChanged && timerStartMs !== null) {
+    const { x, o } = currentTimerValues();
+    const serverVal = activePlayer === 'X' ? xLeft : oLeft;
+    const localVal  = activePlayer === 'X' ? x : o;
+    driftTooLarge = Math.abs(serverVal - localVal) > 1.0;
+  }
+
+  if (playerChanged || driftTooLarge || timerStartMs === null) {
+    timerActivePlayer = activePlayer;
+    timerStartMs = Date.now();
+    timerXatStart = xLeft;
+    timerOatStart = oLeft;
+  }
 }
 
 // Compute current display values from timestamp
@@ -1009,8 +1023,11 @@ function manageTurnTimer(s) {
         return;
     }
 
-    // Sync timer from server state
-    syncTimerFromServer(s.x_time_left, s.o_time_left, activePlayer);
+    // Only sync timer from authoritative server state,
+    // skip during optimistic renders (pendingRequest=true) to avoid jitter
+    if (!pendingRequest) {
+        syncTimerFromServer(s.x_time_left, s.o_time_left, activePlayer);
+    }
     updateTimerDisplay();
     lastActivePlayer = activePlayer;
 
@@ -1359,8 +1376,9 @@ function optimisticPlace(s, c1, s1, c2, s2) {
     ...s,
     cells,
     move_count: id,
-    // Flip player optimistically (server confirms)
-    current_player: player === 'X' ? 'O' : 'X'
+    // Do NOT flip current_player — keep timer on the current player's clock
+    // until the server confirms the turn change.
+    current_player: s.current_player
   };
 }
 

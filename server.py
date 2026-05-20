@@ -157,45 +157,40 @@ class RoomState:
             return st.get("current_player")
         return None
 
-    def _charge_current_player(self, now: float):
-        """Deduct elapsed time from whichever player's clock was running."""
-        if self.turn_start_time is None or self.last_active_player is None:
-            return
-        elapsed = now - self.turn_start_time
-        if self.last_active_player == "X":
-            self.x_time_remaining = max(0.0, self.x_time_remaining - elapsed)
-        else:
-            self.o_time_remaining = max(0.0, self.o_time_remaining - elapsed)
-        self.turn_start_time = now  # reset so we don't double-charge
+    def change_turn(self):
+        """Settle elapsed time for the previous player and start the new
+        player's clock.  This is the ONLY place that mutates
+        x/o_time_remaining and turn_start_time during normal gameplay."""
+        now = time.time()
+        # 1. Charge the player whose clock was running
+        if self.turn_start_time is not None and self.last_active_player is not None:
+            elapsed = now - self.turn_start_time
+            if self.last_active_player == "X":
+                self.x_time_remaining = max(0.0, self.x_time_remaining - elapsed)
+            else:
+                self.o_time_remaining = max(0.0, self.o_time_remaining - elapsed)
+        # 2. Determine who is active NOW (after the game logic already ran)
+        st = self.game.get_state()
+        new_active = self._active_player(st)
+        self.last_active_player = new_active
+        self.turn_start_time = now if new_active is not None else None
 
     def get_state(self) -> dict:
+        """Read-only snapshot — never mutates the timer pool."""
         st = self.game.get_state()
         players_ready = (self.mode == "pve") or (
             self.x is not None and self.o is not None
         )
         now = time.time()
-
         active_player = self._active_player(st)
 
-        if not players_ready or st["status"] == "finished":
-            # Pause everything
-            if st["status"] == "finished":
-                self._charge_current_player(now)
-                self.turn_start_time = None
-            else:
-                # Waiting for second player — reset clocks
-                self.x_time_remaining = 60.0
-                self.o_time_remaining = 60.0
-                self.turn_start_time = None
-                self.last_active_player = None
-        else:
-            if active_player != self.last_active_player:
-                # Turn changed: charge the previous player
-                self._charge_current_player(now)
-                self.last_active_player = active_player
-                self.turn_start_time = now
+        # --- Bootstrap: first call after both players join ---
+        if players_ready and st["status"] != "finished" \
+                and self.turn_start_time is None and active_player is not None:
+            self.last_active_player = active_player
+            self.turn_start_time = now
 
-        # Compute display values (do NOT mutate remaining here)
+        # --- Compute display values (pure read) ---
         elapsed_now = (now - self.turn_start_time) if self.turn_start_time is not None else 0.0
         if active_player == "X" and players_ready and st["status"] != "finished":
             x_display = max(0.0, self.x_time_remaining - elapsed_now)
@@ -363,6 +358,7 @@ def place(room_id: str, body: PlaceBody):
             return JSONResponse({"error": "你不是玩家 O"}, status_code=403)
 
     result = r.game.place(body.c1, body.s1, body.c2, body.s2)
+    r.change_turn()  # settle previous player's clock, start new player's
     if USE_REDIS:
         save_room(room_id, r)
     else:
@@ -396,6 +392,7 @@ def resolve(room_id: str, body: ResolveBody):
             return JSONResponse({"error": "還沒輪到你選擇"}, status_code=403)
 
     result = r.game.resolve(body.piece_id, body.chosen_cell)
+    r.change_turn()  # settle previous player's clock, start new player's
     if USE_REDIS:
         save_room(room_id, r)
     else:
@@ -411,12 +408,13 @@ def timeout(room_id: str, body: TimeoutBody):
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     game = r.game
-    st = r.get_state()  # updates timer state first
 
     # Determine which player is timed out
     if game.status == GameStatus.FINISHED:
-        return JSONResponse({"state": st})
+        return JSONResponse({"state": r.get_state()})
 
+    # Settle the clock so x/o_time_remaining is up-to-date
+    r.change_turn()
     active_player = r.last_active_player
     timed_out_time = r.x_time_remaining if active_player == "X" else r.o_time_remaining
 
@@ -425,6 +423,7 @@ def timeout(room_id: str, body: TimeoutBody):
         game.winner = "O" if active_player == "X" else "X"
         game.winning_lines = []
         r.turn_start_time = None
+        r.last_active_player = None
 
     if USE_REDIS:
         save_room(room_id, r)
@@ -509,6 +508,7 @@ def ai_move(room_id: str, body: AIMoveBody):
                 chosen_cell = random.choice([piece.c1, piece.c2])
                 game.resolve(pid, chosen_cell)
 
+    r.change_turn()  # settle AI's clock after all its moves
     if USE_REDIS:
         save_room(room_id, r)
     else:
