@@ -317,6 +317,59 @@
     100% { transform: scale(1); box-shadow: inset 0 0 0 2px var(--green); }
   }
 
+  /* ── Latency Masking: Quantum Entangling Animations ── */
+  @keyframes quantum-materialize {
+    0%  { transform: scale(0) rotate(-180deg); opacity: 0; filter: blur(3px); }
+    40% { transform: scale(1.25) rotate(15deg); opacity: 0.85; filter: blur(0.5px); }
+    70% { transform: scale(0.88) rotate(-5deg); opacity: 0.6; filter: blur(0); }
+    100%{ transform: scale(1) rotate(0deg); opacity: 0.5; filter: blur(0); }
+  }
+  @keyframes quantum-breathe {
+    0%, 100% { opacity: 0.35; transform: scale(0.93); text-shadow: 0 0 4px currentColor; }
+    50%      { opacity: 0.65; transform: scale(1.07); text-shadow: 0 0 12px currentColor; }
+  }
+  @keyframes quantum-solidify {
+    0%  { transform: scale(1.2); text-shadow: 0 0 14px currentColor; filter: brightness(1.4); }
+    100%{ transform: scale(1); text-shadow: none; filter: brightness(1); }
+  }
+  @keyframes quantum-resolve-ripple {
+    0%  { box-shadow: 0 0 0 0 rgba(59,90,52,0.6); transform: scale(1); }
+    50% { box-shadow: 0 0 14px 5px rgba(59,90,52,0.25); transform: scale(1.12); }
+    100%{ box-shadow: 0 0 6px 2px rgba(59,90,52,0.1); transform: scale(1.04); }
+  }
+  @keyframes cell-ripple {
+    0%  { box-shadow: inset 0 0 0 0 rgba(43,41,37,0.15); }
+    50% { box-shadow: inset 0 0 10px 3px rgba(43,41,37,0.08); }
+    100%{ box-shadow: inset 0 0 0 0 rgba(43,41,37,0); }
+  }
+
+  .q-slot.quantum-entangling {
+    animation: quantum-materialize 500ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    text-shadow: 0 0 6px currentColor;
+  }
+  .q-slot.quantum-waiting {
+    animation: quantum-breathe 1.4s ease-in-out infinite;
+    text-shadow: 0 0 6px currentColor;
+  }
+  .q-slot.quantum-confirmed {
+    animation: quantum-solidify 280ms ease-out forwards;
+  }
+  .q-slot.quantum-resolving {
+    animation: quantum-resolve-ripple 450ms ease-in-out forwards;
+    z-index: 10;
+    position: relative;
+  }
+  .bigcell.entangling-cell {
+    animation: cell-ripple 600ms ease-out;
+  }
+
+  /* Entangling slots stay visible during optimistic collapse prediction */
+  #board.collapse-mode .q-slot.quantum-entangling,
+  #board.collapse-mode .q-slot.quantum-waiting {
+    opacity: 1;
+    pointer-events: none;
+  }
+
   /* ── Collapse Mode Overrides ── */
   #board.collapse-mode .bigcell:hover:not(.classical) {
     background: var(--bg);
@@ -701,6 +754,8 @@ let timerInterval = null;   // local countdown ticker
 let isAITurn = false;
 let aiRunning = false;      // guard: prevent duplicate ai_move calls
 let pendingRequest = false; // optimistic-UI lock
+let entanglingSlots = [];         // [{c, s}] slots currently in entangling animation
+let entanglingBreathTimer = null; // timer to switch entangling → breathing
 let prevStatus = null;
 let prevMoveCount = 0;
 let prevPlayersReady = null;
@@ -1226,7 +1281,9 @@ function render(s_state, isFresh = false) {
           const m = marks[s];
           slot.classList.add(m.player.toLowerCase());
           slot.innerHTML = `${m.player}<sub>${m.id}</sub>`;
-          if (s_state.status === 'collapse' && s_state.pending && s_state.pending.cycle_pieces && s_state.pending.cycle_pieces.includes(m.id)) {
+          if (m.entangling) {
+            slot.classList.add('quantum-entangling');
+          } else if (s_state.status === 'collapse' && s_state.pending && s_state.pending.cycle_pieces && s_state.pending.cycle_pieces.includes(m.id)) {
             slot.classList.add('highlight-slot');
           }
         }
@@ -1339,13 +1396,16 @@ async function onSlotClick(c, s) {
     const mark = state.cells[c].quantum[s];
     if (!mark || !pd.cycle_pieces || !pd.cycle_pieces.includes(mark.id)) return;
 
-    // Optimistic: dim the board immediately to signal processing
+    // Animate the clicked slot instead of dimming the whole board
     pendingRequest = true;
     playSound('collapse');
-    document.getElementById('board').style.opacity = '0.6';
+    const resolveCell = document.getElementById(`cell-${c}`);
+    const resolveSlots = resolveCell ? resolveCell.querySelectorAll('.q-slot') : [];
+    if (resolveSlots[s]) resolveSlots[s].classList.add('quantum-resolving');
 
+    const resolveAnimDelay = new Promise(r => setTimeout(r, 450));
     const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
-    document.getElementById('board').style.opacity = '';
+    await resolveAnimDelay;
     pendingRequest = false;
     if (res.state) { render(res.state, true); await maybeDoAIMove(res.state); }
     return;
@@ -1368,13 +1428,39 @@ async function onSlotClick(c, s) {
         let dummyS = (s + 1) % 9;
         while (state.cells[c].quantum[dummyS]) dummyS = (dummyS + 1) % 9;
 
-        // Optimistic: show piece immediately
+        // Optimistic: show piece with entangling animation
         const optState = optimisticPlace(state, c, s, c, dummyS);
+        entanglingSlots = [{c, s}, {c, s: dummyS}];
         render(optState);
+        document.getElementById(`cell-${c}`).classList.add('entangling-cell');
+
         pendingRequest = true;
+        const singleAnimDelay = new Promise(r => setTimeout(r, 500));
+        entanglingBreathTimer = setTimeout(() => {
+          if (pendingRequest) {
+            document.querySelectorAll('.quantum-entangling').forEach(el => {
+              el.classList.remove('quantum-entangling');
+              el.classList.add('quantum-waiting');
+            });
+          }
+        }, 520);
+
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
+        await singleAnimDelay;
+        clearTimeout(entanglingBreathTimer);
+        entanglingBreathTimer = null;
+        const sConfirmSlots = [...entanglingSlots];
+        entanglingSlots = [];
         pendingRequest = false;
-        if (res.state) { render(res.state, true); await maybeDoAIMove(res.state); }
+
+        if (res.state) {
+          render(res.state, true);
+          sConfirmSlots.forEach(({c: cc, s: ss}) => {
+            const cel = document.getElementById(`cell-${cc}`);
+            if (cel) { const sls = cel.querySelectorAll('.q-slot'); if (sls[ss] && !sls[ss].classList.contains('highlight-slot')) sls[ss].classList.add('quantum-confirmed'); }
+          });
+          await maybeDoAIMove(res.state);
+        }
         return;
     }
 
@@ -1396,27 +1482,61 @@ async function onSlotClick(c, s) {
     const { c: c1, s: s1 } = firstMove;
     firstMove = null;
 
-    // Optimistic: show piece on board immediately
+    // ── Clash Royale-style Latency Masking ──
     playSound('place');
     const optState = optimisticPlace(state, c1, s1, c, s);
+    entanglingSlots = [{c: c1, s: s1}, {c, s}];
     render(optState);
 
+    // Add ripple to the big cells
+    document.getElementById(`cell-${c1}`).classList.add('entangling-cell');
+    document.getElementById(`cell-${c}`).classList.add('entangling-cell');
+
     pendingRequest = true;
+
+    // After entangling animation ends (~520ms), if server still hasn't
+    // responded, gracefully switch to breathing glow instead of freezing
+    entanglingBreathTimer = setTimeout(() => {
+      if (pendingRequest) {
+        document.querySelectorAll('.quantum-entangling').forEach(el => {
+          el.classList.remove('quantum-entangling');
+          el.classList.add('quantum-waiting');
+        });
+      }
+    }, 520);
+
+    // Fire API in parallel with minimum animation window
+    const animDelay = new Promise(r => setTimeout(r, 500));
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
+    await animDelay;
+
+    clearTimeout(entanglingBreathTimer);
+    entanglingBreathTimer = null;
+    const confirmSlots = [...entanglingSlots];
+    entanglingSlots = [];
     pendingRequest = false;
+
     if (res.error) {
         alert(res.error);
-        // Revert optimistic state by re-rendering true server state if available, or just waiting for pollState
         if (res.state) render(res.state, true);
         else {
-            isAITurn = false; // Release lock so pollState can recover
-            // We can manually fetch state to recover
+            isAITurn = false;
             const recovery = await api('/api/state/' + roomId);
             if (recovery.status) render(recovery, true);
         }
     } else if (res.state) {
-        render(res.state, true); 
-        await maybeDoAIMove(res.state); 
+        render(res.state, true);
+        // Brief solidify flash on newly confirmed slots
+        confirmSlots.forEach(({c: cc, s: ss}) => {
+          const cel = document.getElementById(`cell-${cc}`);
+          if (cel) {
+            const sls = cel.querySelectorAll('.q-slot');
+            if (sls[ss] && !sls[ss].classList.contains('highlight-slot')) {
+              sls[ss].classList.add('quantum-confirmed');
+            }
+          }
+        });
+        await maybeDoAIMove(res.state);
     }
   }
 }
@@ -1431,8 +1551,8 @@ function optimisticPlace(s, c1, s1, c2, s2) {
   const player = s.current_player;
   const id = s.move_count + 1;
   const name = player + id;
-  const mark = { name, player, id, partner: c2 };
-  const mark2 = { name, player, id, partner: c1 };
+  const mark = { name, player, id, partner: c2, entangling: true };
+  const mark2 = { name, player, id, partner: c1, entangling: true };
   
   if (cells[c1].type !== 'classical') cells[c1].quantum[s1] = mark;
   if (cells[c2].type !== 'classical') cells[c2].quantum[s2] = mark2;
@@ -1528,6 +1648,8 @@ async function resetGame() {
   firstMove = null;
   aiRunning = false;
   isAITurn = false;
+  if (entanglingBreathTimer) { clearTimeout(entanglingBreathTimer); entanglingBreathTimer = null; }
+  entanglingSlots = [];
   const res = await api('/api/reset/' + roomId, {});
   render(res.state);
   await maybeDoAIMove(res.state);
@@ -1705,6 +1827,8 @@ function showMenu() {
   aiRunning = false;
   pendingRequest = false;
   isPolling = false;
+  if (entanglingBreathTimer) { clearTimeout(entanglingBreathTimer); entanglingBreathTimer = null; }
+  entanglingSlots = [];
   firstMove = null;
   roomId = null;
   playerRole = null;
