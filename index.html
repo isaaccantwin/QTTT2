@@ -661,11 +661,11 @@
     <button id="btn-pve" onclick="createRoom('pve')" style="width: 100%;">🤖 人機對戰 (O)</button>
     <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%;">
         <input type="text" id="join-room-id" placeholder="房間號碼" style="padding: 18px 20px; font-size: 1.3rem; border-radius:12px; border:1px solid var(--border); flex: 1; outline: none;">
-        <button onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
+        <button id="btn-join-room" onclick="joinRoom()" style="flex: 1;">📥 加入房間</button>
     </div>
     <div style="display:flex; gap: 10px; margin-top: 5px; width: 100%;">
         <input type="text" id="fb-input-menu" placeholder="💡 意見回饋 / Feedback..." style="padding: 18px 20px; font-size: 1.1rem; border-radius:12px; border:1px solid var(--border); flex: 2; outline: none;">
-        <button onclick="submitInlineFeedback('fb-input-menu', this)" style="flex: 1; background: var(--cyan); color: #fff; border:none;">送出</button>
+        <button id="btn-send-fb-menu" onclick="submitInlineFeedback('fb-input-menu', this)" style="flex: 1; background: var(--cyan); color: #fff; border:none;">送出</button>
     </div>
   </div>
 </div>
@@ -723,7 +723,7 @@
 
     <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%; max-width: 40vw; min-width: 300px;">
         <input type="text" id="fb-input-game" placeholder="💡 意見回饋 / Feedback..." style="padding: 10px 15px; font-size: 1rem; border-radius:8px; border:1px solid var(--border); flex: 1; outline: none;">
-        <button onclick="submitInlineFeedback('fb-input-game', this)" style="padding: 10px 15px; font-size: 1rem; background: var(--cyan); color: #fff; border:none; border-radius:8px; cursor:pointer;">送出</button>
+        <button id="btn-send-fb-game" onclick="submitInlineFeedback('fb-input-game', this)" style="padding: 10px 15px; font-size: 1rem; background: var(--cyan); color: #fff; border:none; border-radius:8px; cursor:pointer;">送出</button>
     </div>
   </div>
 
@@ -852,7 +852,10 @@ const i18n = {
     take_seat_x: "Sit as X",
     take_seat_o: "Sit as O",
     waiting_seat: "Waiting for players to take seats...",
-    btn_disband: "💥 Disband Room"
+    btn_disband: "💥 Disband Room",
+    join_room_placeholder: "Room ID",
+    btn_join_room: "📥 Join Room",
+    btn_send_feedback: "Submit"
   },
   zh: {
     menu_title: "⚛ 量子圈圈叉叉",
@@ -910,7 +913,10 @@ const i18n = {
     take_seat_x: "入座 X",
     take_seat_o: "入座 O",
     waiting_seat: "等待雙方入座...",
-    btn_disband: "💥 解散房間"
+    btn_disband: "💥 解散房間",
+    join_room_placeholder: "房間號碼",
+    btn_join_room: "📥 加入房間",
+    btn_send_feedback: "送出"
   }
 };
 
@@ -937,6 +943,11 @@ function updateUITexts() {
   document.querySelector('#btn-pve').textContent = t('btn_pve');
   document.querySelector('#btn-seat-x').textContent = t('take_seat_x');
   document.querySelector('#btn-seat-o').textContent = t('take_seat_o');
+  
+  document.getElementById('join-room-id').placeholder = t('join_room_placeholder');
+  document.getElementById('btn-join-room').textContent = t('btn_join_room');
+  document.getElementById('btn-send-fb-menu').textContent = t('btn_send_feedback');
+  document.getElementById('btn-send-fb-game').textContent = t('btn_send_feedback');
   
   document.querySelector('#rules summary').innerHTML = t('rules_title');
   const rulesLines = document.querySelectorAll('#rules .rule-line');
