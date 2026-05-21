@@ -696,6 +696,7 @@ let gameMode = 'pvp';
 let firstMove = null;
 let turnInterval = null;
 let pollInterval = null;
+let isPolling = false;
 let timerInterval = null;   // local countdown ticker
 let isAITurn = false;
 let aiRunning = false;      // guard: prevent duplicate ai_move calls
@@ -1128,7 +1129,13 @@ function initBoard() {
 
 async function takeSeat(role) {
     if (!roomId) return;
+    const btn = document.getElementById(role === 'X' ? 'btn-seat-x' : 'btn-seat-o');
+    const originalText = btn.textContent;
+    btn.textContent = '...';
+    btn.disabled = true;
     const res = await api('/api/take_seat/' + roomId, { role });
+    btn.textContent = originalText;
+    btn.disabled = false;
     if (res.error) {
         alert(res.error);
         return;
@@ -1426,16 +1433,55 @@ function optimisticPlace(s, c1, s1, c2, s2) {
   const name = player + id;
   const mark = { name, player, id, partner: c2 };
   const mark2 = { name, player, id, partner: c1 };
+  
   if (cells[c1].type !== 'classical') cells[c1].quantum[s1] = mark;
-  if (c1 !== c2 && cells[c2].type !== 'classical') cells[c2].quantum[s2] = mark2;
-  return {
-    ...s,
-    cells,
-    move_count: id,
-    // Do NOT flip current_player — keep timer on the current player's clock
-    // until the server confirms the turn change.
-    current_player: s.current_player
-  };
+  if (cells[c2].type !== 'classical') cells[c2].quantum[s2] = mark2;
+
+  const nextPlayer = player === 'X' ? 'O' : 'X';
+
+  function hasPath(start, target) {
+    if (start === target) return true;
+    const visited = new Set();
+    const q = [start];
+    visited.add(start);
+    while(q.length > 0) {
+      const curr = q.shift();
+      if (curr === target) return true;
+      if (s.cells[curr].type === 'classical') continue;
+      for (const m of s.cells[curr].quantum) {
+        if (m) {
+          const nxt = m.partner;
+          if (!visited.has(nxt)) {
+            visited.add(nxt);
+            q.push(nxt);
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  const isCollapse = hasPath(c1, c2);
+
+  if (isCollapse) {
+    return {
+      ...s,
+      cells,
+      move_count: id,
+      status: 'collapse',
+      pending: {
+        choosing_player: nextPlayer,
+        cycle_pieces: [] // Will be populated when server responds
+      }
+    };
+  } else {
+    return {
+      ...s,
+      cells,
+      move_count: id,
+      current_player: nextPlayer
+    };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1524,8 +1570,11 @@ async function enterGame(initialState) {
 }
 
 async function pollState() {
-    if (!roomId || pendingRequest) return;
+    if (!roomId || pendingRequest || isPolling) return;
+    isPolling = true;
     const res = await api(`/api/state/${roomId}`);
+    isPolling = false;
+    if (!roomId || pendingRequest) return;
     console.log('pollState response:', res);
     if (res.error) {
         if (res.error === '找不到該房間' || res.error === 'Room not found') {
@@ -1655,6 +1704,7 @@ function showMenu() {
   isAITurn = false;
   aiRunning = false;
   pendingRequest = false;
+  isPolling = false;
   firstMove = null;
   roomId = null;
   playerRole = null;
