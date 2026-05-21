@@ -643,6 +643,15 @@
 </head>
 <body>
 
+<!-- 全域載入遮罩 -->
+<div id="global-loading" style="display: none; position: fixed; inset: 0; background: rgba(245, 247, 244, 0.85); backdrop-filter: blur(4px); z-index: 9999; flex-direction: column; align-items: center; justify-content: center;">
+  <div style="width: 50px; height: 50px; border: 5px solid var(--border); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+  <p id="loading-text" style="margin-top: 20px; font-family: 'Special Elite', monospace; font-size: 1.5rem; font-weight: bold; color: var(--text);">載入中 / Loading...</p>
+</div>
+<style>
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
 <div id="main-menu">
   <h1>⚛ 量子圈圈叉叉</h1>
   <p>請選擇遊戲模式</p>
@@ -743,6 +752,14 @@
 
 
 <script>
+function showLoading() {
+  const el = document.getElementById('global-loading');
+  if (el) el.style.display = 'flex';
+}
+function hideLoading() {
+  const el = document.getElementById('global-loading');
+  if (el) el.style.display = 'none';
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // 全域狀態與 API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1795,7 +1812,9 @@ async function refreshLobby() {
 
 async function joinRoomById(rid) {
   playSound('click');
+  showLoading();
   const res = await api('/api/join_room', { room_id: rid });
+  hideLoading();
   if (res.error) return alert(res.error);
   roomId = rid;
   playerRole = res.role;
@@ -1805,7 +1824,9 @@ async function joinRoomById(rid) {
 
 async function createRoom(mode) {
   playSound('click');
+  showLoading();
   const res = await api('/api/create_room', { mode: mode });
+  hideLoading();
   console.log('createRoom response:', res);
   roomId = res.room_id;
   playerRole = res.role;
@@ -1817,7 +1838,9 @@ async function joinRoom() {
   playSound('click');
   const rid = document.getElementById('join-room-id').value.trim();
   if (!rid) return alert("請輸入房間號碼 / Enter Room ID");
+  showLoading();
   const res = await api('/api/join_room', { room_id: rid });
+  hideLoading();
   if (res.error) return alert(res.error);
   roomId = rid;
   playerRole = res.role;
