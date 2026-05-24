@@ -248,7 +248,6 @@ def save_room(room_id: str, r: RoomState):
 def load_room(room_id: str) -> RoomState | None:
     if USE_REDIS:
         data = kv.get(f"room:{room_id}")
-        print(f"load_room: room_id={room_id}, found={data is not None}")
         if data:
             d = json.loads(data)
             r = RoomState(d["mode"])
@@ -261,7 +260,6 @@ def load_room(room_id: str) -> RoomState | None:
             r.o_time_remaining = d["o_time_remaining"]
             r.turn_start_time = d["turn_start_time"]
             r.last_active_player = d["last_active_player"]
-            print(f"  loaded: x={r.x}, o={r.o}, move_count={r.game.move_count}")
             return r
     else:
         r = rooms.get(room_id)
@@ -307,7 +305,6 @@ class CreateRoomBody(BaseModel):
 
 @app.post("/api/create_room")
 def create_room(body: CreateRoomBody):
-    print(f"create_room: mode={body.mode}, client_id={body.client_id[:8]}...")
     room_id = str(random.randint(1000, 9999))
     while load_room(room_id) is not None:
         room_id = str(random.randint(1000, 9999))
@@ -320,10 +317,8 @@ def create_room(body: CreateRoomBody):
         role = "Spectator"
     if USE_REDIS:
         save_room(room_id, r)
-        print(f"  saved to Redis: room_id={room_id}, role={role}")
     else:
         rooms[room_id] = r
-        print(f"  saved to memory: room_id={room_id}, role={role}")
     return JSONResponse({"room_id": room_id, "role": role, "state": r.get_state()})
 
 class JoinRoomBody(BaseModel):
@@ -347,6 +342,21 @@ def join_room(body: JoinRoomBody):
         rooms[body.room_id] = r
     return JSONResponse({"role": role, "state": r.get_state()})
 
+@app.get("/api/version/{room_id}")
+def get_version(room_id: str):
+    """Lightweight endpoint — returns only version info for efficient polling."""
+    r = load_room(room_id)
+    if r is None:
+        return JSONResponse({"error": "找不到該房間"}, status_code=404)
+    st = r.game
+    return JSONResponse({
+        "move_count": st.move_count,
+        "status": st.status.value,
+        "has_x": r.x is not None,
+        "has_o": r.o is not None,
+        "players_ready": (r.mode == "pve") or (r.x is not None and r.o is not None),
+    }, headers={"Cache-Control": "no-store"})
+
 @app.get("/api/state/{room_id}")
 def get_state(room_id: str):
     r = load_room(room_id)
@@ -360,7 +370,7 @@ def get_state(room_id: str):
         except Exception:
             pass
             
-    return JSONResponse(r.get_state())
+    return JSONResponse(r.get_state(), headers={"Cache-Control": "no-store"})
 
 class TakeSeatBody(BaseModel):
     client_id: str

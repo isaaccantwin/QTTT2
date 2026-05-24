@@ -1191,10 +1191,13 @@ async function api(path, body = null) {
     ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
     : { method: 'GET' };
   try {
-      const r = await fetch(path, opts);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(path, { ...opts, signal: controller.signal });
+      clearTimeout(timeoutId);
       return await r.json();
   } catch (e) {
-      console.error(e);
+      if (e.name === 'AbortError') return { error: 'Request timeout' };
       return { error: 'Network error' };
   }
 }
@@ -1418,7 +1421,7 @@ async function onBigCellClick(idx) {
 }
 
 async function onSlotClick(c, s) {
-  if (!state || isAITurn || pendingRequest) return;
+  if (!state || isAITurn) return;
 
   // ── Collapse mode ──────────────────────────────────────────────────────────
   if (state.status === 'collapse') {
@@ -1435,7 +1438,7 @@ async function onSlotClick(c, s) {
     const resolveSlots = resolveCell ? resolveCell.querySelectorAll('.q-slot') : [];
     if (resolveSlots[s]) resolveSlots[s].classList.add('quantum-resolving');
 
-    const resolveAnimDelay = new Promise(r => setTimeout(r, 450));
+    const resolveAnimDelay = new Promise(r => setTimeout(r, 280));
     const res = await api('/api/resolve/' + roomId, { piece_id: mark.id, chosen_cell: c });
     await resolveAnimDelay;
     pendingRequest = false;
@@ -1473,7 +1476,7 @@ async function onSlotClick(c, s) {
         document.getElementById(`cell-${c}`).classList.add('entangling-cell');
 
         pendingRequest = true;
-        const singleAnimDelay = new Promise(r => setTimeout(r, 500));
+        const singleAnimDelay = new Promise(r => setTimeout(r, 300));
         entanglingBreathTimer = setTimeout(() => {
           if (pendingRequest) {
             document.querySelectorAll('.quantum-entangling').forEach(el => {
@@ -1481,7 +1484,7 @@ async function onSlotClick(c, s) {
               el.classList.add('quantum-waiting');
             });
           }
-        }, 520);
+        }, 320);
 
         const res = await api('/api/place/' + roomId, { c1: c, s1: s, c2: c, s2: dummyS });
         await singleAnimDelay;
@@ -1532,7 +1535,7 @@ async function onSlotClick(c, s) {
 
     pendingRequest = true;
 
-    // After entangling animation ends (~520ms), if server still hasn't
+    // After entangling animation ends (~320ms), if server still hasn't
     // responded, gracefully switch to breathing glow instead of freezing
     entanglingBreathTimer = setTimeout(() => {
       if (pendingRequest) {
@@ -1541,10 +1544,10 @@ async function onSlotClick(c, s) {
           el.classList.add('quantum-waiting');
         });
       }
-    }, 520);
+    }, 320);
 
     // Fire API in parallel with minimum animation window
-    const animDelay = new Promise(r => setTimeout(r, 500));
+    const animDelay = new Promise(r => setTimeout(r, 300));
     const res = await api('/api/place/' + roomId, { c1, s1, c2: c, s2: s });
     await animDelay;
 
@@ -1717,53 +1720,61 @@ async function enterGame(initialState) {
 
     prevPlayersReady = initialState.players_ready;
     aiRunning = false;
-    console.log('enterGame state:', JSON.stringify(initialState));
-    document.getElementById('room-info').textContent += ` | status: ${initialState.status}, ready: ${initialState.players_ready}, move: ${initialState.move_count}`;
     render(initialState, true);
     if (pollInterval) clearInterval(pollInterval);
-    // Spectators poll more frequently since they have no optimistic UI
-    const pollMs = playerRole === 'Spectator' ? 1500 : 2000;
-    pollInterval = setInterval(pollState, pollMs);
+    pollInterval = setInterval(pollState, 800);
     startLocalTimer();
     // Trigger AI if it moves first (X goes first, player is O in pve)
     await maybeDoAIMove(initialState);
 }
 
 async function pollState() {
-    if (!roomId || pendingRequest || isPolling) return;
+    if (!roomId || isPolling) return;
     isPolling = true;
-    const res = await api(`/api/state/${roomId}`);
-    isPolling = false;
-    if (!roomId || pendingRequest) return;
-    console.log('pollState response:', res);
-    if (res.error) {
-        if (res.error === '找不到該房間' || res.error === 'Room not found') {
-            alert(currentLang === 'zh'
-              ? '房間已關閉（已解散或因無人活動超時），將返回主選單。'
-              : 'Room closed (disbanded or timed out due to inactivity). Returning to main menu.');
-            roomId = null;
-            state = null;
-            showMenu();
+    try {
+        // Phase 1: lightweight version check
+        const ver = await api(`/api/version/${roomId}`);
+        if (!roomId) return;
+        if (ver.error) {
+            if (ver.error === '找不到該房間' || ver.error === 'Room not found') {
+                alert(currentLang === 'zh'
+                  ? '房間已關閉（已解散或因無人活動超時），將返回主選單。'
+                  : 'Room closed (disbanded or timed out due to inactivity). Returning to main menu.');
+                roomId = null;
+                state = null;
+                showMenu();
+            }
+            return;
         }
-        return;
-    }
-    // Always sync timer from server (corrects any drift) — but only when game is live
-    if (res.x_time_left !== undefined && res.players_ready && res.status !== 'finished') {
-        let activePlayer = res.current_player;
-        if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
-            activePlayer = res.pending.choosing_player;
+        const seatChanged = state && (ver.has_x !== state.has_x || ver.has_o !== state.has_o);
+        const stateChanged = ver.move_count > prevMoveCount || ver.status !== prevStatus || ver.players_ready !== prevPlayersReady || seatChanged;
+        if (!stateChanged) return; // Nothing changed — skip full fetch
+
+        // Phase 2: full state fetch (only when needed)
+        const res = await api(`/api/state/${roomId}`);
+        if (!roomId || res.error) return;
+        // Sync timer from server — but only when game is live
+        if (res.x_time_left !== undefined && res.players_ready && res.status !== 'finished') {
+            let activePlayer = res.current_player;
+            if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
+                activePlayer = res.pending.choosing_player;
+            }
+            syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
         }
-        syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
-    }
-    // Only full re-render when something actually changed
-    const seatChanged = state && (res.has_x !== state.has_x || res.has_o !== state.has_o);
-    const stateChanged = res.move_count > prevMoveCount || res.status !== prevStatus || res.players_ready !== prevPlayersReady || seatChanged;
-    if (stateChanged) {
         prevPlayersReady = res.players_ready;
-        render(res, true);
+        if (!pendingRequest) {
+            render(res, true);
+        } else {
+            // Don't disrupt optimistic UI, just update tracking vars
+            state = res;
+            prevStatus = res.status;
+            prevMoveCount = res.move_count;
+        }
+        // Proactively check if AI needs to move
+        if (!pendingRequest) await maybeDoAIMove(res);
+    } finally {
+        isPolling = false;
     }
-    // Proactively check if AI needs to move (helps recover if a previous request failed or lagged)
-    await maybeDoAIMove(res);
 }
 
 // startLocalTimer / stopLocalTimer are defined above near manageTurnTimer
