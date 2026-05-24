@@ -783,8 +783,8 @@ let currentLang = 'zh';
 // ── Timer state (timestamp-based, no drift) ────────────────────────────────
 let timerActivePlayer = null;  // 'X' | 'O' | null
 let timerStartMs = null;       // Date.now() when this turn's countdown began
-let timerXatStart = 0;         // x_time_left when this turn began
-let timerOatStart = 0;         // o_time_left when this turn began
+let timerXatStart = 60;        // x_time_left when this turn began
+let timerOatStart = 60;        // o_time_left when this turn began
 let lastActivePlayer = null;
 
 let clientId = localStorage.getItem('qttt_client_id');
@@ -1087,9 +1087,10 @@ function updateTimerDisplay() {
 function startLocalTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(async () => {
-    if (!state || !state.players_ready || state.status === 'finished') return;
+    if (!state || state.status === 'finished') return;
     updateTimerDisplay();
-    // Check for timeout
+    // Only check for timeout when game is active
+    if (!state.players_ready) return;
     const { x, o } = currentTimerValues();
     const timedOut = (timerActivePlayer === 'X' && x <= 0) || (timerActivePlayer === 'O' && o <= 0);
     if (timedOut && roomId) {
@@ -1114,11 +1115,12 @@ function manageTurnTimer(s, isFresh = false) {
         activePlayer = s.pending && s.pending.choosing_player;
     }
 
-    document.getElementById('panel-o').classList.toggle('active-o', activePlayer === 'O');
-    document.getElementById('panel-x').classList.toggle('active', activePlayer === 'X');
+    // Don't highlight panels until both players are seated and game is live
+    const showActive = s.players_ready && s.status !== 'finished';
+    document.getElementById('panel-o').classList.toggle('active-o', showActive && activePlayer === 'O');
+    document.getElementById('panel-x').classList.toggle('active', showActive && activePlayer === 'X');
 
     if (s.status === 'finished' || !s.players_ready) {
-        stopLocalTimer();
         timerActivePlayer = null;
         timerStartMs = null;
         // Show whatever the server reported
@@ -1745,8 +1747,8 @@ async function pollState() {
         }
         return;
     }
-    // Always sync timer from server (corrects any drift)
-    if (res.x_time_left !== undefined) {
+    // Always sync timer from server (corrects any drift) — but only when game is live
+    if (res.x_time_left !== undefined && res.players_ready && res.status !== 'finished') {
         let activePlayer = res.current_player;
         if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
             activePlayer = res.pending.choosing_player;
