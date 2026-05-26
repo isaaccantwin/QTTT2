@@ -7,12 +7,13 @@ server.py — Quantum Tic-Tac-Toe 極簡後端
 import time
 import uvicorn
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 import random
 import json
 import datetime
+import asyncio
 
 from game_logic import QuantumGame, GameStatus
 
@@ -29,6 +30,51 @@ except Exception as e:
     print(f"[Error] Redis not available: {e}")
 
 app = FastAPI(title="Quantum Tic-Tac-Toe")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, room_id: str):
+        await websocket.accept()
+        if room_id not in self.active_connections:
+            self.active_connections[room_id] = []
+        self.active_connections[room_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        if room_id in self.active_connections:
+            if websocket in self.active_connections[room_id]:
+                self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
+
+    async def broadcast_to_room(self, room_id: str, message: dict):
+        if room_id in self.active_connections:
+            conns = list(self.active_connections[room_id])
+            dead = []
+            for connection in conns:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    dead.append(connection)
+            # Clean up dead connections
+            for conn in dead:
+                self.disconnect(conn, room_id)
+
+    async def close_room(self, room_id: str, reason: dict = None):
+        """Close all WebSocket connections for a room, optionally sending a final message."""
+        if room_id in self.active_connections:
+            conns = list(self.active_connections[room_id])
+            for connection in conns:
+                try:
+                    if reason:
+                        await connection.send_json(reason)
+                    await connection.close()
+                except Exception:
+                    pass
+            self.active_connections.pop(room_id, None)
+
+manager = ConnectionManager()
 
 @app.get("/api/debug")
 def debug():
@@ -60,6 +106,34 @@ def root():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
+@app.websocket("/ws/{room_id}/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str):
+    await manager.connect(websocket, room_id)
+    try:
+        # Send initial state
+        r = load_room(room_id)
+        if r is not None:
+            await websocket.send_json(r.get_state())
+        else:
+            await websocket.send_json({"type": "room_closed"})
+            await websocket.close()
+            return
+        # Keep connection alive, handle client pings
+        while True:
+            data = await websocket.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+            except (json.JSONDecodeError, TypeError):
+                pass
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        manager.disconnect(websocket, room_id)
+
 @app.get("/api/lobby")
 def lobby():
     return JSONResponse({"lobby": get_lobby_info()})
@@ -68,7 +142,7 @@ class LeaveBody(BaseModel):
     client_id: str
 
 @app.post("/api/leave/{room_id}")
-def leave_room(room_id: str, body: LeaveBody):
+def leave_room(room_id: str, body: LeaveBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
@@ -83,18 +157,21 @@ def leave_room(room_id: str, body: LeaveBody):
             save_room(room_id, r)
         else:
             rooms[room_id] = r
+        bg_tasks.add_task(manager.broadcast_to_room, room_id, r.get_state())
     return JSONResponse({"ok": True})
 
 class DisbandRoomBody(BaseModel):
     client_id: str
 
 @app.post("/api/disband_room/{room_id}")
-def disband_room_api(room_id: str, body: DisbandRoomBody):
+async def disband_room_api(room_id: str, body: DisbandRoomBody):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"ok": True})
     if getattr(r, 'creator', None) == body.client_id:
         delete_room(room_id)
+        # Notify all connected clients that the room is closed
+        await manager.close_room(room_id, {"type": "room_closed"})
         return JSONResponse({"ok": True})
     return JSONResponse({"error": "只有創建房間的玩家才能解散房間"}, status_code=403)
 
@@ -243,7 +320,7 @@ def save_room(room_id: str, r: RoomState):
             "turn_start_time": r.turn_start_time,
             "last_active_player": r.last_active_player
         }
-        kv.set(f"room:{room_id}", json.dumps(data), ex=90)
+        kv.set(f"room:{room_id}", json.dumps(data), ex=300)
 
 def load_room(room_id: str) -> RoomState | None:
     if USE_REDIS:
@@ -260,11 +337,16 @@ def load_room(room_id: str) -> RoomState | None:
             r.o_time_remaining = d["o_time_remaining"]
             r.turn_start_time = d["turn_start_time"]
             r.last_active_player = d["last_active_player"]
+            # Extend TTL on access to prevent mid-game expiry
+            try:
+                kv.expire(f"room:{room_id}", 300)
+            except Exception:
+                pass
             return r
     else:
         r = rooms.get(room_id)
         if r is not None:
-            if getattr(r, 'last_polled', time.time()) < time.time() - 90.0:
+            if getattr(r, 'last_polled', time.time()) < time.time() - 300.0:
                 del rooms[room_id]
                 return None
             return r
@@ -304,7 +386,7 @@ class CreateRoomBody(BaseModel):
     client_id: str
 
 @app.post("/api/create_room")
-def create_room(body: CreateRoomBody):
+def create_room(body: CreateRoomBody, bg_tasks: BackgroundTasks):
     room_id = str(random.randint(1000, 9999))
     while load_room(room_id) is not None:
         room_id = str(random.randint(1000, 9999))
@@ -326,7 +408,7 @@ class JoinRoomBody(BaseModel):
     client_id: str
 
 @app.post("/api/join_room")
-def join_room(body: JoinRoomBody):
+def join_room(body: JoinRoomBody, bg_tasks: BackgroundTasks):
     r = load_room(body.room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
@@ -340,6 +422,7 @@ def join_room(body: JoinRoomBody):
         save_room(body.room_id, r)
     else:
         rooms[body.room_id] = r
+    # No broadcast needed simply for joining unless state changes, but joining doesn't alter state
     return JSONResponse({"role": role, "state": r.get_state()})
 
 @app.get("/api/version/{room_id}")
@@ -364,12 +447,6 @@ def get_state(room_id: str):
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     
     r.last_polled = time.time()
-    if USE_REDIS:
-        try:
-            kv.expire(f"room:{room_id}", 90)
-        except Exception:
-            pass
-            
     return JSONResponse(r.get_state(), headers={"Cache-Control": "no-store"})
 
 class TakeSeatBody(BaseModel):
@@ -377,14 +454,13 @@ class TakeSeatBody(BaseModel):
     role: str
 
 @app.post("/api/take_seat/{room_id}")
-def take_seat(room_id: str, body: TakeSeatBody):
+def take_seat(room_id: str, body: TakeSeatBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     if body.role not in ["X", "O"]:
         return JSONResponse({"error": "無效的角色"}, status_code=400)
     
-    # 檢查是否已入座
     if r.x == body.client_id or r.o == body.client_id:
         return JSONResponse({"error": "您已入座"}, status_code=400)
         
@@ -402,7 +478,9 @@ def take_seat(room_id: str, body: TakeSeatBody):
     else:
         rooms[room_id] = r
     
-    return JSONResponse({"role": body.role, "state": r.get_state()})
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({"role": body.role, "state": st})
 
 class PlaceBody(BaseModel):
     client_id: str
@@ -412,7 +490,7 @@ class PlaceBody(BaseModel):
     s2: int
 
 @app.post("/api/place/{room_id}")
-def place(room_id: str, body: PlaceBody):
+def place(room_id: str, body: PlaceBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
@@ -438,7 +516,10 @@ def place(room_id: str, body: PlaceBody):
         save_room(room_id, r)
     else:
         rooms[room_id] = r
-    return JSONResponse({**result, "state": r.get_state()})
+    
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({**result, "state": st})
 
 class ResolveBody(BaseModel):
     client_id: str
@@ -446,7 +527,7 @@ class ResolveBody(BaseModel):
     chosen_cell: int
 
 @app.post("/api/resolve/{room_id}")
-def resolve(room_id: str, body: ResolveBody):
+def resolve(room_id: str, body: ResolveBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
@@ -472,23 +553,24 @@ def resolve(room_id: str, body: ResolveBody):
         save_room(room_id, r)
     else:
         rooms[room_id] = r
-    return JSONResponse({**result, "state": r.get_state()})
+    
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({**result, "state": st})
 
 class TimeoutBody(BaseModel):
     client_id: str
 
 @app.post("/api/timeout/{room_id}")
-def timeout(room_id: str, body: TimeoutBody):
+def timeout(room_id: str, body: TimeoutBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     game = r.game
 
-    # Determine which player is timed out
     if game.status == GameStatus.FINISHED:
         return JSONResponse({"state": r.get_state()})
 
-    # Settle the clock so x/o_time_remaining is up-to-date
     r.change_turn()
     active_player = r.last_active_player
     timed_out_time = r.x_time_remaining if active_player == "X" else r.o_time_remaining
@@ -504,13 +586,16 @@ def timeout(room_id: str, body: TimeoutBody):
         save_room(room_id, r)
     else:
         rooms[room_id] = r
-    return JSONResponse({"state": r.get_state()})
+    
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({"state": st})
 
 class ResetBody(BaseModel):
     client_id: str
 
 @app.post("/api/reset/{room_id}")
-def reset(room_id: str, body: ResetBody):
+def reset(room_id: str, body: ResetBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
@@ -525,19 +610,21 @@ def reset(room_id: str, body: ResetBody):
         save_room(room_id, r)
     else:
         rooms[room_id] = r
-    return JSONResponse({"ok": True, "state": r.get_state()})
+    
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({"ok": True, "state": st})
 
 class AIMoveBody(BaseModel):
     client_id: str
 
 @app.post("/api/ai_move/{room_id}")
-def ai_move(room_id: str, body: AIMoveBody):
+def ai_move(room_id: str, body: AIMoveBody, bg_tasks: BackgroundTasks):
     r = load_room(room_id)
     if r is None:
         return JSONResponse({"error": "找不到該房間"}, status_code=404)
     game = r.game
 
-    # In PvE, human is always "O"
     human_role = "O"
 
     if game.status == GameStatus.PLAYING:
@@ -559,21 +646,17 @@ def ai_move(room_id: str, body: AIMoveBody):
                 c2s2 = random.choice([x for x in valid_spots if x != c1s1])
                 game.place(c1s1[0], c1s1[1], c1s1[0], c2s2[1])
 
-        # After AI places: if collapse triggered, check who should choose
         if game.status == GameStatus.COLLAPSE:
             pd = game.pending
             if pd and pd.get("choosing_player") != human_role:
-                # AI must choose the collapse direction → auto-resolve
                 cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
                 pid = random.choice(cycle_pieces)
                 if pid in game.pieces:
                     piece = game.pieces[pid]
                     chosen_cell = random.choice([piece.c1, piece.c2])
                     game.resolve(pid, chosen_cell)
-            # else: human chooses → leave COLLAPSE state for frontend
 
     elif game.status == GameStatus.COLLAPSE:
-        # Game was already in COLLAPSE — only resolve if AI is the chooser
         pd = game.pending
         if pd and pd.get("choosing_player") != human_role:
             cycle_pieces = pd.get("cycle_pieces", [pd["piece_id"]])
@@ -583,12 +666,15 @@ def ai_move(room_id: str, body: AIMoveBody):
                 chosen_cell = random.choice([piece.c1, piece.c2])
                 game.resolve(pid, chosen_cell)
 
-    r.change_turn()  # settle AI's clock after all its moves
+    r.change_turn()
     if USE_REDIS:
         save_room(room_id, r)
     else:
         rooms[room_id] = r
-    return JSONResponse({"ok": True, "state": r.get_state()})
+        
+    st = r.get_state()
+    bg_tasks.add_task(manager.broadcast_to_room, room_id, st)
+    return JSONResponse({"ok": True, "state": st})
 
 # ── 啟動 ──────────────────────────────────────────────────────────────────────
 

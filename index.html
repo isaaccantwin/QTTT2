@@ -767,8 +767,7 @@ let state = null;
 let gameMode = 'pvp';
 let firstMove = null;
 let turnInterval = null;
-let pollInterval = null;
-let isPolling = false;
+let ws = null;              // WebSocket connection
 let timerInterval = null;   // local countdown ticker
 let isAITurn = false;
 let aiRunning = false;      // guard: prevent duplicate ai_move calls
@@ -1721,61 +1720,145 @@ async function enterGame(initialState) {
     prevPlayersReady = initialState.players_ready;
     aiRunning = false;
     render(initialState, true);
-    if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(pollState, 800);
+    connectWebSocket(roomId, clientId);
     startLocalTimer();
     // Trigger AI if it moves first (X goes first, player is O in pve)
     await maybeDoAIMove(initialState);
 }
 
-async function pollState() {
-    if (!roomId || isPolling) return;
-    isPolling = true;
-    try {
-        // Phase 1: lightweight version check
-        const ver = await api(`/api/version/${roomId}`);
-        if (!roomId) return;
-        if (ver.error) {
-            if (ver.error === '找不到該房間' || ver.error === 'Room not found') {
+let wsReconnectTimer = null;
+let wsPingInterval = null;
+let pollInterval = null;
+let isPolling = false;
+let wsFailCount = 0;
+let usingPolling = false;
+
+// ── Shared handler for incoming state (used by both WS and polling) ──
+async function handleStateUpdate(res) {
+    if (!roomId) return;
+    if (res.error) {
+        if (res.error === '找不到該房間' || res.error === 'Room not found') {
+            alert(currentLang === 'zh'
+              ? '房間已關閉（已解散或因無人活動超時），將返回主選單。'
+              : 'Room closed (disbanded or timed out). Returning to main menu.');
+            showMenu();
+        }
+        return;
+    }
+    // Sync timer from server — but only when game is live
+    if (res.x_time_left !== undefined && res.players_ready && res.status !== 'finished') {
+        let activePlayer = res.current_player;
+        if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
+            activePlayer = res.pending.choosing_player;
+        }
+        syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
+    }
+
+    prevPlayersReady = res.players_ready;
+    if (!pendingRequest) {
+        render(res, true);
+    } else {
+        // Don't disrupt optimistic UI, just update tracking vars
+        state = res;
+        prevStatus = res.status;
+        prevMoveCount = res.move_count;
+    }
+
+    // Proactively check if AI needs to move
+    if (!pendingRequest) await maybeDoAIMove(res);
+}
+
+// ── WebSocket mode ──
+function connectWebSocket(room, client) {
+    closeTransport();
+    usingPolling = false;
+    wsFailCount = 0;
+
+    function attemptWs() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/${room}/${client}`;
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            wsFailCount = 0;
+            if (wsPingInterval) clearInterval(wsPingInterval);
+            wsPingInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send('{"type":"ping"}');
+                }
+            }, 25000);
+        };
+
+        ws.onmessage = async (event) => {
+            const res = JSON.parse(event.data);
+            if (res.type === 'pong') return;
+            if (res.type === 'room_closed') {
                 alert(currentLang === 'zh'
                   ? '房間已關閉（已解散或因無人活動超時），將返回主選單。'
-                  : 'Room closed (disbanded or timed out due to inactivity). Returning to main menu.');
-                roomId = null;
-                state = null;
+                  : 'Room closed (disbanded or timed out). Returning to main menu.');
                 showMenu();
+                return;
             }
-            return;
-        }
-        const seatChanged = state && (ver.has_x !== state.has_x || ver.has_o !== state.has_o);
-        const stateChanged = ver.move_count > prevMoveCount || ver.status !== prevStatus || ver.players_ready !== prevPlayersReady || seatChanged;
-        if (!stateChanged) return; // Nothing changed — skip full fetch
+            await handleStateUpdate(res);
+        };
 
-        // Phase 2: full state fetch (only when needed)
-        const res = await api(`/api/state/${roomId}`);
-        if (!roomId || res.error) return;
-        // Sync timer from server — but only when game is live
-        if (res.x_time_left !== undefined && res.players_ready && res.status !== 'finished') {
-            let activePlayer = res.current_player;
-            if (res.status === 'collapse' && res.pending && res.pending.choosing_player) {
-                activePlayer = res.pending.choosing_player;
+        ws.onerror = () => {};
+
+        ws.onclose = () => {
+            if (wsPingInterval) { clearInterval(wsPingInterval); wsPingInterval = null; }
+            if (!roomId) return;
+            wsFailCount++;
+            // After 2 consecutive failures, fall back to polling
+            if (wsFailCount >= 2) {
+                console.log('[QTTT] WebSocket unavailable, falling back to polling');
+                startPolling(room);
+            } else {
+                wsReconnectTimer = setTimeout(() => attemptWs(), 2000);
             }
-            syncTimerFromServer(res.x_time_left, res.o_time_left, activePlayer);
-        }
-        prevPlayersReady = res.players_ready;
-        if (!pendingRequest) {
-            render(res, true);
-        } else {
-            // Don't disrupt optimistic UI, just update tracking vars
-            state = res;
-            prevStatus = res.status;
-            prevMoveCount = res.move_count;
-        }
-        // Proactively check if AI needs to move
-        if (!pendingRequest) await maybeDoAIMove(res);
-    } finally {
-        isPolling = false;
+        };
+    }
+
+    attemptWs();
+}
+
+// ── Polling fallback ──
+function startPolling(room) {
+    usingPolling = true;
+    closeWebSocket();
+    if (pollInterval) clearInterval(pollInterval);
+    const pollMs = playerRole === 'Spectator' ? 1500 : 2000;
+    pollInterval = setInterval(() => pollState(room), pollMs);
+}
+
+async function pollState(room) {
+    if (!roomId || pendingRequest || isPolling) return;
+    isPolling = true;
+    const res = await api(`/api/state/${room || roomId}`);
+    isPolling = false;
+    if (!roomId || pendingRequest) return;
+    await handleStateUpdate(res);
+}
+
+// ── Cleanup ──
+function closeWebSocket() {
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    if (wsPingInterval) { clearInterval(wsPingInterval); wsPingInterval = null; }
+    if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
     }
 }
+
+function closeTransport() {
+    closeWebSocket();
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    isPolling = false;
+    usingPolling = false;
+    wsFailCount = 0;
+}
+
+
 
 // startLocalTimer / stopLocalTimer are defined above near manageTurnTimer
 
@@ -1877,12 +1960,11 @@ function showMenu() {
   document.getElementById('spectator-banner').classList.remove('show');
   document.body.classList.remove('has-banner');
   clearInterval(turnInterval);
-  if (pollInterval) clearInterval(pollInterval);
+  closeTransport();
   stopLocalTimer();
   isAITurn = false;
   aiRunning = false;
   pendingRequest = false;
-  isPolling = false;
   if (entanglingBreathTimer) { clearTimeout(entanglingBreathTimer); entanglingBreathTimer = null; }
   entanglingSlots = [];
   firstMove = null;
@@ -1962,6 +2044,7 @@ async function submitInlineFeedback(inputId, btn) {
 initBoard();
 
 window.addEventListener('beforeunload', () => {
+  closeTransport();
   if (roomId) {
     navigator.sendBeacon('/api/leave/' + roomId, JSON.stringify({ client_id: clientId }));
   }
